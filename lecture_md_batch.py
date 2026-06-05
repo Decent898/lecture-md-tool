@@ -24,6 +24,13 @@ def parse_args() -> argparse.Namespace:
     source.add_argument("--video", type=Path, help="Process one video file.")
     source.add_argument("--input-dir", type=Path, help="Process videos in a directory.")
     parser.add_argument("--today", action="store_true", help="Only process files modified today.")
+    parser.add_argument("--file-glob", default="*", help="Filename glob for --input-dir, for example screen_*.mp4.")
+    parser.add_argument(
+        "--include-name",
+        action="append",
+        default=[],
+        help="Only process files whose name contains this text. Repeat to include multiple courses.",
+    )
     parser.add_argument("--output-root", required=True, type=Path)
     parser.add_argument("--scene-threshold", default="0.001")
     parser.add_argument("--min-scene-len", default="5")
@@ -70,6 +77,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", default=600.0, type=float)
     parser.add_argument("--terms", default=DEFAULT_TERMS, help="Course/domain terms for API language optimization.")
     parser.add_argument("--skip-existing", action="store_true")
+    parser.add_argument("--dry-run", action="store_true", help="Print selected videos and exit without processing.")
     return parser.parse_args()
 
 
@@ -79,13 +87,15 @@ def safe_name(path: Path) -> str:
     return name or "video"
 
 
-def iter_videos(input_dir: Path, today_only: bool) -> list[Path]:
+def iter_videos(input_dir: Path, today_only: bool, file_glob: str, include_names: list[str]) -> list[Path]:
     today = datetime.now().date()
     videos: list[Path] = []
-    for path in input_dir.iterdir():
+    for path in input_dir.glob(file_glob):
         if not path.is_file() or path.suffix.lower() not in VIDEO_EXTS:
             continue
         if today_only and datetime.fromtimestamp(path.stat().st_mtime).date() != today:
+            continue
+        if include_names and not any(name in path.name for name in include_names):
             continue
         videos.append(path)
     return sorted(videos, key=lambda item: item.stat().st_mtime)
@@ -252,7 +262,12 @@ def main() -> None:
         raise RuntimeError("Set MIMO_API_KEY, or use --asr local --optimize none.")
 
     args.output_root.mkdir(parents=True, exist_ok=True)
-    videos = [args.video] if args.video else iter_videos(args.input_dir, args.today)
+    videos = [args.video] if args.video else iter_videos(args.input_dir, args.today, args.file_glob, args.include_name)
+    if args.dry_run:
+        for video in videos:
+            print(video, flush=True)
+        print(f"Selected {len(videos)} video(s).", flush=True)
+        return
     records: list[dict] = []
     manifest_path = args.output_root / "manifest.json"
 

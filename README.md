@@ -113,6 +113,29 @@ Windows PowerShell:
 .\run_today.ps1 -InputDir "$env:USERPROFILE\Downloads" -OutputRoot ".\batch_mimo_today" --asr local --optimize none
 ```
 
+## Process AutoSlides Course Videos
+
+On Windows, this helper processes `E:\AutoSlides\screen_*.mp4` for the two default courses `计算机组成与体系结构` and `软件工程基础`:
+
+```powershell
+.\run_autoslides_courses.ps1 -DryRun
+.\run_autoslides_courses.ps1
+```
+
+By default it uses local Whisper ASR, API optimization, API handout-note generation, conservative slide debounce, and writes to:
+
+```text
+%USERPROFILE%\Documents\lecture_md_runs\autoslides_courses
+```
+
+Useful variants:
+
+```powershell
+.\run_autoslides_courses.ps1 -Asr local -Optimize none -Notes none
+.\run_autoslides_courses.ps1 -Courses "计算机组成与体系结构"
+.\run_autoslides_courses.ps1 -InputDir "E:\AutoSlides" -OutputRoot "D:\lecture_notes"
+```
+
 ## ASR And Optimization Modes
 
 Fast local transcription, no API key:
@@ -157,6 +180,9 @@ Useful parameters:
 - `--dedupe-slides` / `--no-dedupe-slides`: clean slide cuts; enabled by default
 - `--dedupe-mode debounce`: default AutoSlides-style conservative debounce. Use `merge` for the older aggressive visual merge mode.
 - `--dedupe-stable-seconds 6`: in `debounce` mode, only visually repeated or flip-back cuts shorter than this are folded
+- `--file-glob "screen_*.mp4"`: when using `--input-dir`, only consider matching filenames
+- `--include-name "课程名"`: when using `--input-dir`, only process filenames containing the text. Repeat for multiple courses.
+- `--dry-run`: print selected videos and exit
 - `--dedupe-hash-distance 6`: larger means more tolerant perceptual-hash matching
 - `--dedupe-rms 4.0`: larger means more tolerant pixel-level matching
 - `--dedupe-min-slide-seconds 2`: always treat very short repeated cuts as unstable
