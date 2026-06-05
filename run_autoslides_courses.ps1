@@ -31,9 +31,14 @@ if (($Asr -eq "api" -or $Optimize -eq "api" -or $Notes -eq "api") -and -not $env
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BatchScript = Join-Path $ScriptDir "lecture_md_batch.py"
 $PreferredPython = Join-Path (Split-Path -Parent $ScriptDir) ".venv-slidegeist\Scripts\python.exe"
+$PreferredSlidegeist = Join-Path (Split-Path -Parent $ScriptDir) ".venv-slidegeist\Scripts\slidegeist.exe"
 $PythonExe = "python"
+$SlidegeistExe = "slidegeist"
 if (Test-Path -LiteralPath $PreferredPython) {
     $PythonExe = $PreferredPython
+}
+if (Test-Path -LiteralPath $PreferredSlidegeist) {
+    $SlidegeistExe = $PreferredSlidegeist
 }
 
 if ($Courses.Count -eq 0) {
@@ -62,6 +67,7 @@ if (-not $NoSkipExisting) {
     --input-dir $InputDir `
     --file-glob "screen_*.mp4" `
     --output-root $OutputRoot `
+    --slidegeist-bin $SlidegeistExe `
     --dedupe-mode debounce `
     --dedupe-stable-seconds $DedupeStableSeconds `
     --asr $Asr `

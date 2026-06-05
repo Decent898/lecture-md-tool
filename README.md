@@ -183,6 +183,7 @@ Useful parameters:
 - `--file-glob "screen_*.mp4"`: when using `--input-dir`, only consider matching filenames
 - `--include-name "课程名"`: when using `--input-dir`, only process filenames containing the text. Repeat for multiple courses.
 - `--dry-run`: print selected videos and exit
+- `--slidegeist-bin`: path to `slidegeist` when it is installed in a venv instead of on `PATH`
 - `--dedupe-hash-distance 6`: larger means more tolerant perceptual-hash matching
 - `--dedupe-rms 4.0`: larger means more tolerant pixel-level matching
 - `--dedupe-min-slide-seconds 2`: always treat very short repeated cuts as unstable

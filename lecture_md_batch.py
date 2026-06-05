@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
         help="Only process files whose name contains this text. Repeat to include multiple courses.",
     )
     parser.add_argument("--output-root", required=True, type=Path)
+    parser.add_argument("--slidegeist-bin", default="slidegeist", help="Path to slidegeist executable.")
     parser.add_argument("--scene-threshold", default="0.001")
     parser.add_argument("--min-scene-len", default="5")
     parser.add_argument("--start-offset", default="0")
@@ -105,13 +106,14 @@ def run_slidegeist(
     *,
     video: Path,
     out_dir: Path,
+    slidegeist_bin: str,
     scene_threshold: str,
     min_scene_len: str,
     start_offset: str,
     log_path: Path,
 ) -> None:
     cmd = [
-        "slidegeist",
+        slidegeist_bin,
         "slides",
         str(video),
         "--out",
@@ -154,6 +156,7 @@ def process_video(args: argparse.Namespace, video: Path) -> dict:
     run_slidegeist(
         video=video,
         out_dir=out_dir,
+        slidegeist_bin=args.slidegeist_bin,
         scene_threshold=args.scene_threshold,
         min_scene_len=args.min_scene_len,
         start_offset=args.start_offset,
