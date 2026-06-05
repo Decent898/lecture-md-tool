@@ -1,0 +1,31 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+*.env
+
+# Generated outputs
+out/
+output/
+batch_mimo_today/
+slidegeist_process_*/
+slides/
+slides.md
+slides_mimo_asr.md
+slides_mimo_asr_corrected.md
+mimo_asr.json
+mimo_asr_corrections.json
+batch.log
+
+# Media inputs and temporary audio
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.wmv
+*.webm
+*.m4v
+*.wav
+
