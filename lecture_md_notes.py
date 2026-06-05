@@ -233,7 +233,7 @@ def run_notes(
                 retry_sleep=retry_sleep,
                 timeout=timeout,
             )
-            lecture_note = result["lecture_note_md"]
+            lecture_note = normalize_embedded_headings(result["lecture_note_md"])
             notes = result["notes"]
             raw_response = result["raw_response"]
         else:
