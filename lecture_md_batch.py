@@ -10,6 +10,7 @@ from lecture_md_asr import DEFAULT_BASE_URL as DEFAULT_ASR_BASE_URL
 from lecture_md_asr import run_asr
 from lecture_md_correct import DEFAULT_BASE_URL as DEFAULT_OPTIMIZE_BASE_URL
 from lecture_md_correct import run_correction
+from lecture_md_dedupe import dedupe_slides
 
 
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v"}
@@ -25,6 +26,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scene-threshold", default="0.001")
     parser.add_argument("--min-scene-len", default="5")
     parser.add_argument("--start-offset", default="0")
+    parser.add_argument("--dedupe-slides", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--dedupe-hash-distance", default=6, type=int)
+    parser.add_argument("--dedupe-rms", default=4.0, type=float)
+    parser.add_argument("--dedupe-min-slide-seconds", default=2.0, type=float)
+    parser.add_argument("--dedupe-crop-ratio", default=0.04, type=float)
     parser.add_argument("--asr", choices=["api", "local"], default="api", help="ASR backend: MiMo API or local Whisper.")
     parser.add_argument("--optimize", choices=["api", "none"], default="api", help="Language optimization backend.")
     parser.add_argument("--asr-base-url", default=DEFAULT_ASR_BASE_URL, help="ASR API base URL when --asr api.")
@@ -126,9 +132,31 @@ def process_video(args: argparse.Namespace, video: Path) -> dict:
         start_offset=args.start_offset,
         log_path=log_path,
     )
+    slides_md = out_dir / "slides.md"
+    if args.dedupe_slides:
+        summary = dedupe_slides(
+            slides_md=slides_md,
+            out_md=slides_md,
+            out_json=out_dir / "slides_dedupe.json",
+            max_hash_distance=args.dedupe_hash_distance,
+            max_rms=args.dedupe_rms,
+            min_slide_seconds=args.dedupe_min_slide_seconds,
+            crop_ratio=args.dedupe_crop_ratio,
+            keep_raw=True,
+        )
+        with log_path.open("a", encoding="utf-8") as log:
+            log.write(
+                f"\nDeduped slides: {summary['input_slides']} -> {summary['output_slides']} "
+                f"(merged {summary['merged_slides']})\n"
+            )
+        print(
+            f"Deduped slides: {summary['input_slides']} -> {summary['output_slides']} "
+            f"(merged {summary['merged_slides']})",
+            flush=True,
+        )
     run_asr(
         video=video,
-        slides_md=out_dir / "slides.md",
+        slides_md=slides_md,
         out_md=asr_md,
         out_json=out_dir / "asr.json",
         backend=args.asr,

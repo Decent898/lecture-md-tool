@@ -13,6 +13,12 @@ batch_mimo_today/
 slidegeist_process_*/
 slides/
 slides.md
+slides_raw.md
+slides_dedupe.json
+slides_asr.md
+slides_optimized.md
+asr.json
+optimization.json
 slides_mimo_asr.md
 slides_mimo_asr_corrected.md
 mimo_asr.json
@@ -28,4 +34,3 @@ batch.log
 *.webm
 *.m4v
 *.wav
-
