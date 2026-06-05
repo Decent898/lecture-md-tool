@@ -12,6 +12,7 @@ from lecture_md_correct import DEFAULT_BASE_URL as DEFAULT_OPTIMIZE_BASE_URL
 from lecture_md_correct import DEFAULT_TERMS
 from lecture_md_correct import run_correction
 from lecture_md_dedupe import dedupe_slides
+from lecture_md_notes import run_notes
 
 
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v"}
@@ -35,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dedupe-crop-ratio", default=0.04, type=float)
     parser.add_argument("--asr", choices=["api", "local"], default="api", help="ASR backend: MiMo API or local Whisper.")
     parser.add_argument("--optimize", choices=["api", "none"], default="api", help="Language optimization backend.")
+    parser.add_argument("--notes", choices=["api", "none"], default="none", help="Generate cleaned lecture notes.")
     parser.add_argument("--asr-base-url", default=DEFAULT_ASR_BASE_URL, help="ASR API base URL when --asr api.")
     parser.add_argument(
         "--optimize-base-url",
@@ -117,7 +119,9 @@ def run_slidegeist(
 def process_video(args: argparse.Namespace, video: Path) -> dict:
     out_dir = args.output_root / safe_name(video)
     asr_md = out_dir / "slides_asr.md"
-    final_md = out_dir / ("slides_optimized.md" if args.optimize == "api" else "slides_asr.md")
+    transcript_md = out_dir / ("slides_optimized.md" if args.optimize == "api" else "slides_asr.md")
+    notes_md = out_dir / "slides_lecture_notes.md"
+    final_md = notes_md if args.notes == "api" else transcript_md
     if args.skip_existing and final_md.exists():
         return {"video": str(video), "output": str(out_dir), "final_md": str(final_md), "status": "skipped"}
 
@@ -179,8 +183,24 @@ def process_video(args: argparse.Namespace, video: Path) -> dict:
     if args.optimize == "api":
         run_correction(
             slides_md=asr_md,
-            out_md=final_md,
+            out_md=transcript_md,
             out_json=out_dir / "optimization.json",
+            base_url=args.optimize_base_url,
+            model=args.optimize_model,
+            sleep=args.sleep,
+            retries=args.retries,
+            retry_sleep=args.retry_sleep,
+            timeout=args.timeout,
+            terms=args.terms,
+            resume=True,
+        )
+    if args.notes == "api":
+        run_notes(
+            slides_md=transcript_md,
+            out_md=notes_md,
+            out_json=out_dir / "lecture_notes.json",
+            asr_json=out_dir / "asr.json",
+            optimization_json=out_dir / "optimization.json",
             base_url=args.optimize_base_url,
             model=args.optimize_model,
             sleep=args.sleep,
@@ -214,7 +234,7 @@ def write_index(output_root: Path, records: list[dict]) -> None:
 
 def main() -> None:
     args = parse_args()
-    if (args.asr == "api" or args.optimize == "api") and not os.environ.get("MIMO_API_KEY"):
+    if (args.asr == "api" or args.optimize == "api" or args.notes == "api") and not os.environ.get("MIMO_API_KEY"):
         raise RuntimeError("Set MIMO_API_KEY, or use --asr local --optimize none.")
 
     args.output_root.mkdir(parents=True, exist_ok=True)

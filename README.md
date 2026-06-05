@@ -9,7 +9,8 @@ The workflow is:
 3. `ffmpeg` cuts audio according to each deduped slide time range.
 4. ASR transcribes each slide's audio, using either MiMo API or local Whisper.
 5. Optional language optimization uses RapidOCR plus MiMo text API to correct ASR errors with slide context.
-6. The final note is written to `slides_asr.md` or `slides_optimized.md`.
+6. Optional lecture-note generation turns each slide into a concise, de-oralized handout page while keeping transcripts.
+7. The final note is written to `slides_asr.md`, `slides_optimized.md`, or `slides_lecture_notes.md`.
 
 ## Outputs
 
@@ -23,6 +24,8 @@ Each video gets its own output directory:
 - `asr.json`: raw ASR records and metadata
 - `slides_optimized.md`: final API-optimized Markdown when `--optimize api`
 - `optimization.json`: OCR text, original ASR, optimized transcript, and notes
+- `slides_lecture_notes.md`: cleaned handout-style notes plus corrected transcript and ASR text when `--notes api`
+- `lecture_notes.json`: per-slide cleaned note records
 - `batch.log`: command log for batch runs
 
 ## Requirements
@@ -126,6 +129,13 @@ export MIMO_API_KEY="your-key"
 python lecture_md_batch.py --video /path/to/video.mp4 --output-root ./out --asr local --optimize api
 ```
 
+Local transcription plus API cleanup and handout notes:
+
+```bash
+export MIMO_API_KEY="your-key"
+python lecture_md_batch.py --video /path/to/video.mp4 --output-root ./out --asr local --optimize api --notes api
+```
+
 Full API mode:
 
 ```bash
@@ -152,6 +162,7 @@ Useful parameters:
 - `--dedupe-crop-ratio 0.04`: ignore slide edges while comparing screenshots
 - `--asr api|local`: choose MiMo API ASR or local Whisper ASR
 - `--optimize api|none`: run or skip API language optimization
+- `--notes api|none`: generate de-oralized lecture-note pages while preserving transcripts
 - `--asr-language zh`: ASR language code; use `auto` for local auto-detect
 - `--local-asr-model small`: faster-whisper model for local ASR
 - `--local-asr-device cpu`: set `cuda` if faster-whisper can use your GPU
