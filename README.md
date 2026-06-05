@@ -5,8 +5,8 @@ Turn lecture screen-recording videos into Markdown notes aligned by slide page.
 The workflow is:
 
 1. `slidegeist` detects slide/page changes and extracts `slides/slide_XXX.jpg`.
-2. A dedupe pass merges visually similar slide cuts caused by cursor motion, pointer marks, compression noise, or tiny animations.
-3. `ffmpeg` cuts audio according to each deduped slide time range.
+2. A debounce pass folds only unstable slide cuts caused by cursor motion, pointer marks, compression noise, or brief flip-back frames.
+3. `ffmpeg` cuts audio according to each cleaned slide time range.
 4. ASR transcribes each slide's audio, using either MiMo API or local Whisper.
 5. Optional language optimization uses RapidOCR plus MiMo text API to correct ASR errors with slide context.
 6. Optional lecture-note generation turns each slide into a concise, de-oralized handout page while keeping transcripts.
@@ -18,7 +18,7 @@ Each video gets its own output directory:
 
 - `slides.md`: slidegeist's extracted slide timeline
 - `slides_raw.md`: original slidegeist timeline before dedupe, when dedupe is enabled
-- `slides_dedupe.json`: dedupe summary and merge metadata
+- `slides_dedupe.json`: debounce/dedupe summary and merge metadata
 - `slides/`: extracted slide images
 - `slides_asr.md`: per-slide ASR transcript
 - `asr.json`: raw ASR records and metadata
@@ -154,10 +154,12 @@ python lecture_md_batch.py --input-dir ~/Downloads --today --output-root ./batch
 
 Useful parameters:
 
-- `--dedupe-slides` / `--no-dedupe-slides`: merge repeated slide cuts; enabled by default
-- `--dedupe-hash-distance 6`: larger means more aggressive visual duplicate merging
-- `--dedupe-rms 4.0`: larger means more tolerant of pixel-level noise
-- `--dedupe-min-slide-seconds 2`: merge extremely short cuts into the previous slide
+- `--dedupe-slides` / `--no-dedupe-slides`: clean slide cuts; enabled by default
+- `--dedupe-mode debounce`: default AutoSlides-style conservative debounce. Use `merge` for the older aggressive visual merge mode.
+- `--dedupe-stable-seconds 6`: in `debounce` mode, only visually repeated or flip-back cuts shorter than this are folded
+- `--dedupe-hash-distance 6`: larger means more tolerant perceptual-hash matching
+- `--dedupe-rms 4.0`: larger means more tolerant pixel-level matching
+- `--dedupe-min-slide-seconds 2`: always treat very short repeated cuts as unstable
 - `--dedupe-max-slide-seconds 300`: keep long repeated-slide stretches split into manageable chunks
 - `--dedupe-crop-ratio 0.04`: ignore slide edges while comparing screenshots
 - `--asr api|local`: choose MiMo API ASR or local Whisper ASR
@@ -181,7 +183,8 @@ Useful parameters:
 - If `ffmpeg` is installed but not found on Windows, add its `bin` directory to the current shell first, for example: `$env:PATH="C:\path\to\ffmpeg\bin;$env:PATH"`.
 - `mimo-v2.5-asr` is used through `/v1/chat/completions` with `input_audio`, not `/v1/audio/transcriptions`.
 - Local ASR uses `faster-whisper`; the first run downloads the selected Whisper model.
-- If a two-hour lecture produces hundreds or thousands of slides, keep dedupe enabled and raise `--dedupe-hash-distance` or `--dedupe-rms`.
+- Default `--dedupe-mode debounce` is conservative: long slide segments are preserved even when they look similar, which protects progressive PPT pages.
+- If a two-hour lecture produces hundreds or thousands of slides, keep dedupe enabled, raise `--dedupe-stable-seconds`, or use `--dedupe-mode merge` only when you accept more aggressive duplicate removal.
 - Long slide intervals are split into smaller audio chunks automatically.
 - The scripts retry 429 and temporary network failures and write progress incrementally so runs can resume.
 - If slide detection is poor for a video, tune `--scene-threshold` and `--min-scene-len`.

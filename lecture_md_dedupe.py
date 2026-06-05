@@ -115,6 +115,17 @@ def same_slide(
     return hamming_distance(current.dhash, previous.dhash) <= max_hash_distance or rmsdiff(current.thumb, previous.thumb) <= max_rms
 
 
+def visual_metrics(current: ImageSignature, previous: ImageSignature) -> dict[str, float | int]:
+    return {
+        "hash_distance": hamming_distance(current.dhash, previous.dhash),
+        "rms": rmsdiff(current.thumb, previous.thumb),
+    }
+
+
+def near_duplicate(metrics: dict[str, float | int], *, max_hash_distance: int, max_rms: float) -> bool:
+    return int(metrics["hash_distance"]) <= max_hash_distance and float(metrics["rms"]) <= max_rms
+
+
 def format_slide_block(index: int, start: float, end: float, image_name: str) -> str:
     slide_id = f"slide_{index:03d}"
     return (
@@ -126,18 +137,158 @@ def format_slide_block(index: int, start: float, end: float, image_name: str) ->
     )
 
 
+def new_kept_slide(section: SlideSection, reason: str) -> dict[str, Any]:
+    return {
+        "source_slide_id": section.slide_id,
+        "image": section.image_name,
+        "start_seconds": section.start_seconds,
+        "end_seconds": section.end_seconds,
+        "original_duration_seconds": max(section.end_seconds - section.start_seconds, 0.0),
+        "merged_from": [section.slide_id],
+        "decision": reason,
+        "merge_reasons": [],
+    }
+
+
+def can_extend_slide(last_kept: dict[str, Any], section: SlideSection, max_slide_seconds: float) -> bool:
+    if max_slide_seconds <= 0:
+        return True
+    return section.end_seconds - float(last_kept["start_seconds"]) <= max_slide_seconds
+
+
+def merge_slide(
+    last_kept: dict[str, Any],
+    section: SlideSection,
+    *,
+    reason: str,
+    metrics: dict[str, float | int] | None = None,
+) -> None:
+    last_kept["end_seconds"] = max(float(last_kept["end_seconds"]), section.end_seconds)
+    last_kept["merged_from"].append(section.slide_id)
+    item: dict[str, Any] = {
+        "slide_id": section.slide_id,
+        "reason": reason,
+        "duration_seconds": max(section.end_seconds - section.start_seconds, 0.0),
+    }
+    if metrics is not None:
+        item["hash_distance"] = int(metrics["hash_distance"])
+        item["rms"] = round(float(metrics["rms"]), 4)
+    last_kept["merge_reasons"].append(item)
+
+
+def run_merge_dedupe(
+    *,
+    sections: list[SlideSection],
+    signatures: list[ImageSignature],
+    max_hash_distance: int,
+    max_rms: float,
+    min_slide_seconds: float,
+    max_slide_seconds: float,
+) -> list[dict[str, Any]]:
+    kept: list[dict[str, Any]] = []
+    last_signature: ImageSignature | None = None
+    last_kept: dict[str, Any] | None = None
+
+    for section, signature in zip(sections, signatures, strict=True):
+        duration = max(section.end_seconds - section.start_seconds, 0.0)
+        should_merge = False
+        metrics: dict[str, float | int] | None = None
+        if last_signature is not None and last_kept is not None:
+            metrics = visual_metrics(signature, last_signature)
+            visually_same = int(metrics["hash_distance"]) <= max_hash_distance or float(metrics["rms"]) <= max_rms
+            too_short = duration < min_slide_seconds
+            should_merge = (visually_same or too_short) and can_extend_slide(last_kept, section, max_slide_seconds)
+
+        if should_merge and last_kept is not None:
+            merge_slide(last_kept, section, reason="merge_visual_or_short", metrics=metrics)
+            last_signature = signature
+            continue
+
+        last_kept = new_kept_slide(section, "kept")
+        kept.append(last_kept)
+        last_signature = signature
+
+    return kept
+
+
+def run_debounce_dedupe(
+    *,
+    sections: list[SlideSection],
+    signatures: list[ImageSignature],
+    max_hash_distance: int,
+    max_rms: float,
+    min_slide_seconds: float,
+    stable_seconds: float,
+    max_slide_seconds: float,
+) -> list[dict[str, Any]]:
+    kept: list[dict[str, Any]] = []
+    kept_signatures: list[ImageSignature] = []
+    force_merge_return_indices: set[int] = set()
+
+    for index, (section, signature) in enumerate(zip(sections, signatures, strict=True)):
+        if not kept:
+            kept.append(new_kept_slide(section, "kept_first"))
+            kept_signatures.append(signature)
+            continue
+
+        last_kept = kept[-1]
+        last_signature = kept_signatures[-1]
+        duration = max(section.end_seconds - section.start_seconds, 0.0)
+        unstable = stable_seconds > 0 and duration < stable_seconds
+        too_short = min_slide_seconds > 0 and duration < min_slide_seconds
+        metrics = visual_metrics(signature, last_signature)
+        same_as_last_kept = near_duplicate(metrics, max_hash_distance=max_hash_distance, max_rms=max_rms)
+        within_max_duration = can_extend_slide(last_kept, section, max_slide_seconds)
+
+        next_returns_to_last_kept = False
+        if index + 1 < len(sections):
+            next_metrics = visual_metrics(signatures[index + 1], last_signature)
+            next_returns_to_last_kept = near_duplicate(
+                next_metrics,
+                max_hash_distance=max_hash_distance,
+                max_rms=max_rms,
+            )
+
+        merge_reason: str | None = None
+        last_was_short_candidate = str(last_kept.get("decision", "")) == "kept_distinct_short"
+
+        if index in force_merge_return_indices and same_as_last_kept:
+            merge_reason = "debounce_return_to_saved_slide"
+        elif same_as_last_kept and last_was_short_candidate:
+            merge_reason = "debounce_confirm_short_candidate"
+        elif same_as_last_kept and (too_short or unstable):
+            merge_reason = "debounce_unstable_same_as_saved"
+        elif unstable and next_returns_to_last_kept:
+            merge_reason = "debounce_unstable_return_to_saved_slide"
+            force_merge_return_indices.add(index + 1)
+
+        if merge_reason and within_max_duration:
+            merge_slide(last_kept, section, reason=merge_reason, metrics=metrics)
+            continue
+
+        kept.append(new_kept_slide(section, "kept_stable" if not unstable else "kept_distinct_short"))
+        kept_signatures.append(signature)
+
+    return kept
+
+
 def dedupe_slides(
     *,
     slides_md: Path,
     out_md: Path,
     out_json: Path,
+    mode: str = "debounce",
     max_hash_distance: int = 6,
     max_rms: float = 4.0,
     min_slide_seconds: float = 2.0,
+    stable_seconds: float = 6.0,
     max_slide_seconds: float = 300.0,
     crop_ratio: float = 0.04,
     keep_raw: bool = True,
 ) -> dict[str, Any]:
+    if mode not in {"debounce", "merge"}:
+        raise ValueError("mode must be 'debounce' or 'merge'.")
+
     markdown = slides_md.read_text(encoding="utf-8")
     header, sections = parse_slides(markdown)
     if not sections:
@@ -149,44 +300,34 @@ def dedupe_slides(
             shutil.copy2(slides_md, raw_md)
 
     slides_dir = slides_md.parent / "slides"
-    kept: list[dict[str, Any]] = []
-    last_signature: ImageSignature | None = None
-    last_kept: dict[str, Any] | None = None
-
+    parseable_sections: list[SlideSection] = []
+    signatures: list[ImageSignature] = []
     for section in sections:
         image_path = slides_dir / section.image_name
         if not image_path.exists():
             continue
-        signature = image_signature(image_path, crop_ratio)
-        duration = max(section.end_seconds - section.start_seconds, 0.0)
-        should_merge = False
-        if last_signature is not None and last_kept is not None:
-            merged_duration = section.end_seconds - float(last_kept["start_seconds"])
-            visually_same = same_slide(
-                signature,
-                last_signature,
-                max_hash_distance=max_hash_distance,
-                max_rms=max_rms,
-            )
-            too_short = duration < min_slide_seconds
-            within_max_duration = max_slide_seconds <= 0 or merged_duration <= max_slide_seconds
-            should_merge = (visually_same or too_short) and within_max_duration
+        parseable_sections.append(section)
+        signatures.append(image_signature(image_path, crop_ratio))
 
-        if should_merge and last_kept is not None:
-            last_kept["end_seconds"] = max(float(last_kept["end_seconds"]), section.end_seconds)
-            last_kept["merged_from"].append(section.slide_id)
-            last_signature = signature
-            continue
-
-        last_kept = {
-            "source_slide_id": section.slide_id,
-            "image": section.image_name,
-            "start_seconds": section.start_seconds,
-            "end_seconds": section.end_seconds,
-            "merged_from": [section.slide_id],
-        }
-        kept.append(last_kept)
-        last_signature = signature
+    if mode == "merge":
+        kept = run_merge_dedupe(
+            sections=parseable_sections,
+            signatures=signatures,
+            max_hash_distance=max_hash_distance,
+            max_rms=max_rms,
+            min_slide_seconds=min_slide_seconds,
+            max_slide_seconds=max_slide_seconds,
+        )
+    else:
+        kept = run_debounce_dedupe(
+            sections=parseable_sections,
+            signatures=signatures,
+            max_hash_distance=max_hash_distance,
+            max_rms=max_rms,
+            min_slide_seconds=min_slide_seconds,
+            stable_seconds=stable_seconds,
+            max_slide_seconds=max_slide_seconds,
+        )
 
     body = []
     for index, item in enumerate(kept, start=1):
@@ -204,9 +345,11 @@ def dedupe_slides(
         "input_slides": len(sections),
         "output_slides": len(kept),
         "merged_slides": len(sections) - len(kept),
+        "mode": mode,
         "max_hash_distance": max_hash_distance,
         "max_rms": max_rms,
         "min_slide_seconds": min_slide_seconds,
+        "stable_seconds": stable_seconds,
         "max_slide_seconds": max_slide_seconds,
         "crop_ratio": crop_ratio,
         "slides": kept,
@@ -220,9 +363,11 @@ def main() -> None:
     parser.add_argument("--slides-md", required=True, type=Path)
     parser.add_argument("--out-md", required=True, type=Path)
     parser.add_argument("--out-json", required=True, type=Path)
+    parser.add_argument("--mode", choices=["debounce", "merge"], default="debounce")
     parser.add_argument("--max-hash-distance", default=6, type=int)
     parser.add_argument("--max-rms", default=4.0, type=float)
     parser.add_argument("--min-slide-seconds", default=2.0, type=float)
+    parser.add_argument("--stable-seconds", default=6.0, type=float)
     parser.add_argument("--max-slide-seconds", default=300.0, type=float)
     parser.add_argument("--crop-ratio", default=0.04, type=float)
     parser.add_argument("--no-keep-raw", action="store_true")
@@ -231,9 +376,11 @@ def main() -> None:
         slides_md=args.slides_md,
         out_md=args.out_md,
         out_json=args.out_json,
+        mode=args.mode,
         max_hash_distance=args.max_hash_distance,
         max_rms=args.max_rms,
         min_slide_seconds=args.min_slide_seconds,
+        stable_seconds=args.stable_seconds,
         max_slide_seconds=args.max_slide_seconds,
         crop_ratio=args.crop_ratio,
         keep_raw=not args.no_keep_raw,

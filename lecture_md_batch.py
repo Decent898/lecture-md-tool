@@ -29,9 +29,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-scene-len", default="5")
     parser.add_argument("--start-offset", default="0")
     parser.add_argument("--dedupe-slides", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--dedupe-mode",
+        choices=["debounce", "merge"],
+        default="debounce",
+        help="Slide cleanup mode: AutoSlides-style debounce, or older aggressive visual merge.",
+    )
     parser.add_argument("--dedupe-hash-distance", default=6, type=int)
     parser.add_argument("--dedupe-rms", default=4.0, type=float)
     parser.add_argument("--dedupe-min-slide-seconds", default=2.0, type=float)
+    parser.add_argument(
+        "--dedupe-stable-seconds",
+        default=6.0,
+        type=float,
+        help="In debounce mode, only visually repeated/returning cuts shorter than this are folded.",
+    )
     parser.add_argument("--dedupe-max-slide-seconds", default=300.0, type=float)
     parser.add_argument("--dedupe-crop-ratio", default=0.04, type=float)
     parser.add_argument("--asr", choices=["api", "local"], default="api", help="ASR backend: MiMo API or local Whisper.")
@@ -143,9 +155,11 @@ def process_video(args: argparse.Namespace, video: Path) -> dict:
             slides_md=slides_md,
             out_md=slides_md,
             out_json=out_dir / "slides_dedupe.json",
+            mode=args.dedupe_mode,
             max_hash_distance=args.dedupe_hash_distance,
             max_rms=args.dedupe_rms,
             min_slide_seconds=args.dedupe_min_slide_seconds,
+            stable_seconds=args.dedupe_stable_seconds,
             max_slide_seconds=args.dedupe_max_slide_seconds,
             crop_ratio=args.dedupe_crop_ratio,
             keep_raw=True,
