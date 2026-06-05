@@ -214,7 +214,7 @@ def run_correction(
     corrected_blocks: list[str] = []
     for index, section in enumerate(sections, start=1):
         slide_id = section["slide_id"]
-        print(f"[Correct {index}/{len(sections)}] {slide_id}", flush=True)
+        print(f"[Optimize {index}/{len(sections)}] {slide_id}", flush=True)
         transcript = section["transcript"]
         if slide_id in completed:
             corrected = str(completed[slide_id].get("corrected_transcript", "")).strip()
@@ -268,6 +268,8 @@ def main() -> None:
     parser.add_argument("--slides-md", required=True, type=Path)
     parser.add_argument("--out-md", required=True, type=Path)
     parser.add_argument("--out-json", required=True, type=Path)
+    parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
+    parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--sleep", default=5.0, type=float)
     parser.add_argument("--retries", default=12, type=int)
     parser.add_argument("--retry-sleep", default=30.0, type=float)

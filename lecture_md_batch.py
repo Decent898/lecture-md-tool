@@ -6,7 +6,9 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from lecture_md_asr import DEFAULT_BASE_URL as DEFAULT_ASR_BASE_URL
 from lecture_md_asr import run_asr
+from lecture_md_correct import DEFAULT_BASE_URL as DEFAULT_OPTIMIZE_BASE_URL
 from lecture_md_correct import run_correction
 
 
@@ -23,6 +25,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scene-threshold", default="0.001")
     parser.add_argument("--min-scene-len", default="5")
     parser.add_argument("--start-offset", default="0")
+    parser.add_argument("--asr", choices=["api", "local"], default="api", help="ASR backend: MiMo API or local Whisper.")
+    parser.add_argument("--optimize", choices=["api", "none"], default="api", help="Language optimization backend.")
+    parser.add_argument("--asr-base-url", default=DEFAULT_ASR_BASE_URL, help="ASR API base URL when --asr api.")
+    parser.add_argument(
+        "--optimize-base-url",
+        default=DEFAULT_OPTIMIZE_BASE_URL,
+        help="Optimization API base URL when --optimize api.",
+    )
+    parser.add_argument("--asr-model", default="mimo-v2.5-asr", help="MiMo ASR model when --asr api.")
+    parser.add_argument("--optimize-model", default="mimo-v2.5-pro", help="MiMo text model when --optimize api.")
+    parser.add_argument("--asr-language", default="zh", help="ASR language code, or auto for local auto-detect.")
+    parser.add_argument("--local-asr-model", default="small", help="faster-whisper model name for --asr local.")
+    parser.add_argument("--local-asr-device", default="cpu", help="faster-whisper device: cpu, cuda, or auto.")
+    parser.add_argument("--local-asr-compute-type", default="int8", help="faster-whisper compute type.")
+    parser.add_argument("--local-asr-beam-size", default=5, type=int)
     parser.add_argument("--max-chunk-seconds", default=90.0, type=float)
     parser.add_argument("--padding", default=2.0, type=float)
     parser.add_argument("--sleep", default=5.0, type=float)
@@ -92,7 +109,8 @@ def run_slidegeist(
 
 def process_video(args: argparse.Namespace, video: Path) -> dict:
     out_dir = args.output_root / safe_name(video)
-    final_md = out_dir / "slides_mimo_asr_corrected.md"
+    asr_md = out_dir / "slides_asr.md"
+    final_md = out_dir / ("slides_optimized.md" if args.optimize == "api" else "slides_asr.md")
     if args.skip_existing and final_md.exists():
         return {"video": str(video), "output": str(out_dir), "final_md": str(final_md), "status": "skipped"}
 
@@ -111,8 +129,16 @@ def process_video(args: argparse.Namespace, video: Path) -> dict:
     run_asr(
         video=video,
         slides_md=out_dir / "slides.md",
-        out_md=out_dir / "slides_mimo_asr.md",
-        out_json=out_dir / "mimo_asr.json",
+        out_md=asr_md,
+        out_json=out_dir / "asr.json",
+        backend=args.asr,
+        base_url=args.asr_base_url,
+        model=args.asr_model,
+        language=args.asr_language,
+        local_model=args.local_asr_model,
+        local_device=args.local_asr_device,
+        local_compute_type=args.local_asr_compute_type,
+        local_beam_size=args.local_asr_beam_size,
         padding=args.padding,
         max_chunk_seconds=args.max_chunk_seconds,
         sleep=args.sleep,
@@ -120,16 +146,19 @@ def process_video(args: argparse.Namespace, video: Path) -> dict:
         retry_sleep=args.retry_sleep,
         resume=True,
     )
-    run_correction(
-        slides_md=out_dir / "slides_mimo_asr.md",
-        out_md=final_md,
-        out_json=out_dir / "mimo_asr_corrections.json",
-        sleep=args.sleep,
-        retries=args.retries,
-        retry_sleep=args.retry_sleep,
-        timeout=args.timeout,
-        resume=True,
-    )
+    if args.optimize == "api":
+        run_correction(
+            slides_md=asr_md,
+            out_md=final_md,
+            out_json=out_dir / "optimization.json",
+            base_url=args.optimize_base_url,
+            model=args.optimize_model,
+            sleep=args.sleep,
+            retries=args.retries,
+            retry_sleep=args.retry_sleep,
+            timeout=args.timeout,
+            resume=True,
+        )
     return {"video": str(video), "output": str(out_dir), "final_md": str(final_md), "status": "ok"}
 
 
@@ -154,8 +183,8 @@ def write_index(output_root: Path, records: list[dict]) -> None:
 
 def main() -> None:
     args = parse_args()
-    if not os.environ.get("MIMO_API_KEY"):
-        raise RuntimeError("Set MIMO_API_KEY before running.")
+    if (args.asr == "api" or args.optimize == "api") and not os.environ.get("MIMO_API_KEY"):
+        raise RuntimeError("Set MIMO_API_KEY, or use --asr local --optimize none.")
 
     args.output_root.mkdir(parents=True, exist_ok=True)
     videos = [args.video] if args.video else iter_videos(args.input_dir, args.today)
@@ -178,4 +207,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
