@@ -14,6 +14,8 @@ import requests
 
 DEFAULT_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 DEFAULT_MODEL = "mimo-v2.5-asr"
+TIMESTAMP_RE = r"(?:\d{1,2}:)?\d+:\d{2}"
+TRANSCRIPT_RE = re.compile(r"(?ms)^(### Transcript\s*\n+)(.*?)(?=^---\s*$|^### |\Z)")
 
 
 def timestamp_to_seconds(text: str) -> float:
@@ -35,11 +37,9 @@ def parse_sections(markdown: str) -> tuple[str, list[dict[str, Any]]]:
         start = match.start()
         end = matches[idx + 1].start() if idx + 1 < len(matches) else len(markdown)
         block = markdown[start:end]
-        time_match = re.search(r"\*\*Time:\*\*\s*(\d+:\d+|\d+:\d+:\d+)\s*-\s*(\d+:\d+|\d+:\d+:\d+)", block)
+        time_match = re.search(rf"\*\*Time:\*\*\s*({TIMESTAMP_RE})\s*-\s*({TIMESTAMP_RE})", block)
         image_match = re.search(r"\[!\[Slide\]\(slides/([^)]+)\)\]\(slides/[^)]+\)", block)
-        transcript_match = re.search(
-            r"(?s)(### Transcript\s*\n\n)(.*?)(?=\n\n---\s*$|\n\n### |\Z)", block
-        )
+        transcript_match = TRANSCRIPT_RE.search(block)
         if not time_match:
             raise ValueError(f"No time range found for {match.group(1)}")
         t_start = timestamp_to_seconds(time_match.group(1))
@@ -190,12 +190,7 @@ def replace_transcript(block: str, transcript: str) -> str:
         if insert_at == -1:
             return block.rstrip() + f"\n\n### Transcript\n\n{transcript}\n"
         return block[:insert_at].rstrip() + f"\n\n### Transcript\n\n{transcript}\n\n" + block[insert_at:]
-    return re.sub(
-        r"(?s)(### Transcript\s*\n\n)(.*?)(?=\n\n---\s*$|\n\n### |\Z)",
-        lambda m: m.group(1) + transcript.strip(),
-        block,
-        count=1,
-    )
+    return TRANSCRIPT_RE.sub(lambda m: m.group(1) + transcript.strip() + "\n\n", block, count=1)
 
 
 def normalize_backend(backend: str) -> str:

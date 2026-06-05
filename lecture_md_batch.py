@@ -9,6 +9,7 @@ from pathlib import Path
 from lecture_md_asr import DEFAULT_BASE_URL as DEFAULT_ASR_BASE_URL
 from lecture_md_asr import run_asr
 from lecture_md_correct import DEFAULT_BASE_URL as DEFAULT_OPTIMIZE_BASE_URL
+from lecture_md_correct import DEFAULT_TERMS
 from lecture_md_correct import run_correction
 from lecture_md_dedupe import dedupe_slides
 
@@ -30,6 +31,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dedupe-hash-distance", default=6, type=int)
     parser.add_argument("--dedupe-rms", default=4.0, type=float)
     parser.add_argument("--dedupe-min-slide-seconds", default=2.0, type=float)
+    parser.add_argument("--dedupe-max-slide-seconds", default=300.0, type=float)
     parser.add_argument("--dedupe-crop-ratio", default=0.04, type=float)
     parser.add_argument("--asr", choices=["api", "local"], default="api", help="ASR backend: MiMo API or local Whisper.")
     parser.add_argument("--optimize", choices=["api", "none"], default="api", help="Language optimization backend.")
@@ -52,6 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--retries", default=12, type=int)
     parser.add_argument("--retry-sleep", default=30.0, type=float)
     parser.add_argument("--timeout", default=600.0, type=float)
+    parser.add_argument("--terms", default=DEFAULT_TERMS, help="Course/domain terms for API language optimization.")
     parser.add_argument("--skip-existing", action="store_true")
     return parser.parse_args()
 
@@ -85,7 +88,7 @@ def run_slidegeist(
 ) -> None:
     cmd = [
         "slidegeist",
-        "process",
+        "slides",
         str(video),
         "--out",
         str(out_dir),
@@ -95,8 +98,6 @@ def run_slidegeist(
         min_scene_len,
         "--start-offset",
         start_offset,
-        "--model",
-        "base",
         "-v",
     ]
     with log_path.open("a", encoding="utf-8") as log:
@@ -141,6 +142,7 @@ def process_video(args: argparse.Namespace, video: Path) -> dict:
             max_hash_distance=args.dedupe_hash_distance,
             max_rms=args.dedupe_rms,
             min_slide_seconds=args.dedupe_min_slide_seconds,
+            max_slide_seconds=args.dedupe_max_slide_seconds,
             crop_ratio=args.dedupe_crop_ratio,
             keep_raw=True,
         )
@@ -185,6 +187,7 @@ def process_video(args: argparse.Namespace, video: Path) -> dict:
             retries=args.retries,
             retry_sleep=args.retry_sleep,
             timeout=args.timeout,
+            terms=args.terms,
             resume=True,
         )
     return {"video": str(video), "output": str(out_dir), "final_md": str(final_md), "status": "ok"}
@@ -201,7 +204,7 @@ def write_index(output_root: Path, records: list[dict]) -> None:
         final_md = Path(record.get("final_md", ""))
         output = Path(record.get("output", ""))
         label = output.name or Path(record["video"]).stem
-        if final_md.exists():
+        if record.get("final_md") and final_md.exists():
             link = final_md.relative_to(output_root).as_posix()
             lines.append(f"| {label} | {record['status']} | [{final_md.name}]({link}) |")
         else:

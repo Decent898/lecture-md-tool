@@ -68,6 +68,16 @@ Windows PowerShell:
 $env:MIMO_API_KEY = "your-key"
 ```
 
+For course-specific API cleanup, pass a term list or set it as an environment variable:
+
+```bash
+export LECTURE_MD_TERMS="LR(0), LR(1), FIRST, FOLLOW, GOTO, ACTION, 移进, 规约, 文法"
+```
+
+```powershell
+$env:LECTURE_MD_TERMS = "LR(0), LR(1), FIRST, FOLLOW, GOTO, ACTION, 移进, 规约, 文法"
+```
+
 ## Process One Video
 
 macOS/Linux:
@@ -138,6 +148,7 @@ Useful parameters:
 - `--dedupe-hash-distance 6`: larger means more aggressive visual duplicate merging
 - `--dedupe-rms 4.0`: larger means more tolerant of pixel-level noise
 - `--dedupe-min-slide-seconds 2`: merge extremely short cuts into the previous slide
+- `--dedupe-max-slide-seconds 300`: keep long repeated-slide stretches split into manageable chunks
 - `--dedupe-crop-ratio 0.04`: ignore slide edges while comparing screenshots
 - `--asr api|local`: choose MiMo API ASR or local Whisper ASR
 - `--optimize api|none`: run or skip API language optimization
@@ -146,6 +157,7 @@ Useful parameters:
 - `--local-asr-device cpu`: set `cuda` if faster-whisper can use your GPU
 - `--asr-model mimo-v2.5-asr`: MiMo ASR model
 - `--optimize-model mimo-v2.5-pro`: MiMo text model for language optimization
+- `--terms "LR(0), LR(1), ..."`: course/domain terms used by API language optimization
 - `--asr-base-url` and `--optimize-base-url`: API base URLs
 - `--scene-threshold 0.001`: lower means more sensitive slide cuts
 - `--min-scene-len 5`: merge very short segments
@@ -155,6 +167,7 @@ Useful parameters:
 
 ## Notes
 
+- If `ffmpeg` is installed but not found on Windows, add its `bin` directory to the current shell first, for example: `$env:PATH="C:\path\to\ffmpeg\bin;$env:PATH"`.
 - `mimo-v2.5-asr` is used through `/v1/chat/completions` with `input_audio`, not `/v1/audio/transcriptions`.
 - Local ASR uses `faster-whisper`; the first run downloads the selected Whisper model.
 - If a two-hour lecture produces hundreds or thousands of slides, keep dedupe enabled and raise `--dedupe-hash-distance` or `--dedupe-rms`.

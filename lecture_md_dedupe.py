@@ -9,6 +9,9 @@ from typing import Any
 from PIL import Image, ImageChops, ImageStat
 
 
+TIMESTAMP_RE = r"(?:\d{1,2}:)?\d+:\d{2}"
+
+
 @dataclass
 class SlideSection:
     slide_id: str
@@ -54,7 +57,7 @@ def parse_slides(markdown: str) -> tuple[str, list[SlideSection]]:
         end = matches[idx + 1].start() if idx + 1 < len(matches) else len(markdown)
         block = markdown[match.start() : end]
         title_match = re.search(r"(?m)^##\s+(.+?)\s*$", block)
-        time_match = re.search(r"\*\*Time:\*\*\s*(\d+:\d+|\d+:\d+:\d+)\s*-\s*(\d+:\d+|\d+:\d+:\d+)", block)
+        time_match = re.search(rf"\*\*Time:\*\*\s*({TIMESTAMP_RE})\s*-\s*({TIMESTAMP_RE})", block)
         image_match = re.search(r"\[!\[Slide\]\(slides/([^)]+)\)\]\(slides/[^)]+\)", block)
         if not time_match or not image_match:
             continue
@@ -131,6 +134,7 @@ def dedupe_slides(
     max_hash_distance: int = 6,
     max_rms: float = 4.0,
     min_slide_seconds: float = 2.0,
+    max_slide_seconds: float = 300.0,
     crop_ratio: float = 0.04,
     keep_raw: bool = True,
 ) -> dict[str, Any]:
@@ -157,6 +161,7 @@ def dedupe_slides(
         duration = max(section.end_seconds - section.start_seconds, 0.0)
         should_merge = False
         if last_signature is not None and last_kept is not None:
+            merged_duration = section.end_seconds - float(last_kept["start_seconds"])
             visually_same = same_slide(
                 signature,
                 last_signature,
@@ -164,7 +169,8 @@ def dedupe_slides(
                 max_rms=max_rms,
             )
             too_short = duration < min_slide_seconds
-            should_merge = visually_same or too_short
+            within_max_duration = max_slide_seconds <= 0 or merged_duration <= max_slide_seconds
+            should_merge = (visually_same or too_short) and within_max_duration
 
         if should_merge and last_kept is not None:
             last_kept["end_seconds"] = max(float(last_kept["end_seconds"]), section.end_seconds)
@@ -201,6 +207,7 @@ def dedupe_slides(
         "max_hash_distance": max_hash_distance,
         "max_rms": max_rms,
         "min_slide_seconds": min_slide_seconds,
+        "max_slide_seconds": max_slide_seconds,
         "crop_ratio": crop_ratio,
         "slides": kept,
     }
@@ -216,6 +223,7 @@ def main() -> None:
     parser.add_argument("--max-hash-distance", default=6, type=int)
     parser.add_argument("--max-rms", default=4.0, type=float)
     parser.add_argument("--min-slide-seconds", default=2.0, type=float)
+    parser.add_argument("--max-slide-seconds", default=300.0, type=float)
     parser.add_argument("--crop-ratio", default=0.04, type=float)
     parser.add_argument("--no-keep-raw", action="store_true")
     args = parser.parse_args()
@@ -226,6 +234,7 @@ def main() -> None:
         max_hash_distance=args.max_hash_distance,
         max_rms=args.max_rms,
         min_slide_seconds=args.min_slide_seconds,
+        max_slide_seconds=args.max_slide_seconds,
         crop_ratio=args.crop_ratio,
         keep_raw=not args.no_keep_raw,
     )

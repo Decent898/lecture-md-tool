@@ -11,6 +11,12 @@ import requests
 
 DEFAULT_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 DEFAULT_MODEL = "mimo-v2.5-pro"
+DEFAULT_TERMS = (
+    "LR(0), LR(1), LALR(1), LL(1), FIRST, FOLLOW, SELECT, 终结符, 非终结符, "
+    "项目集, 规范族, 闭包, GOTO, ACTION, GOTO表, 移进, 规约, 接受, 语法分析, "
+    "自顶向下分析, 自下而上分析, 文法, 产生式, 句柄, 活前缀, 分析栈"
+)
+TRANSCRIPT_RE = re.compile(r"(?ms)^(### Transcript\s*\n+)(.*?)(?=^---\s*$|^### |\Z)")
 
 
 def parse_sections(markdown: str) -> tuple[str, list[dict[str, Any]]]:
@@ -25,9 +31,7 @@ def parse_sections(markdown: str) -> tuple[str, list[dict[str, Any]]]:
         block = markdown[start:end]
         image_match = re.search(r"\[!\[Slide\]\(slides/([^)]+)\)\]\(slides/[^)]+\)", block)
         time_match = re.search(r"\*\*Time:\*\*\s*([^\n]+)", block)
-        transcript_match = re.search(
-            r"(?s)(### Transcript\s*\n\n)(.*?)(?=\n\n---\s*$|\n\n### |\Z)", block
-        )
+        transcript_match = TRANSCRIPT_RE.search(block)
         sections.append(
             {
                 "slide_id": match.group(1),
@@ -79,6 +83,7 @@ def call_mimo(
     slide_time: str,
     ocr_text: str,
     transcript: str,
+    terms: str,
     retries: int,
     retry_sleep: float,
     timeout: float,
@@ -89,12 +94,10 @@ def call_mimo(
         "保留老师的讲课口吻和原有信息顺序。重点修正中英混合技术术语、同音错字、标点和断句。"
         "如果 OCR 和 ASR 冲突，以 ASR 表达的语义为主，以 OCR 作为术语和页面上下文参考。只输出 JSON。"
     )
+    terms_text = terms.strip() or DEFAULT_TERMS
     user = f"""请校正这一页的课堂转写。
 固定术语参考：
-Vivado, Verilog, FPGA, Xilinx, testbench, simulation, Behavioral Simulation,
-Add Sources, Run Simulation, Flow Navigator, bitstream, RISC-V, RISCV, RV32I,
-CPU, ALU, PC, IF, ID, EX, MEM, WB, 七段数码管, 16进制, 行为仿真, 约束文件,
-源代码, 工程, 仿真波形。
+{terms_text}
 页码：{slide_id}
 时间：{slide_time}
 
@@ -147,7 +150,7 @@ PPT OCR 文本：
         parsed = extract_json_object(content)
         corrected = str(parsed.get("corrected_transcript", "")).strip()
         if not corrected and transcript:
-            raise ValueError("missing corrected_transcript")
+            corrected = transcript
         notes = parsed.get("notes", [])
         if not isinstance(notes, list):
             notes = [str(notes)]
@@ -167,12 +170,7 @@ def replace_transcript(block: str, corrected: str) -> str:
         if insert_at == -1:
             return block.rstrip() + f"\n\n### Transcript\n\n{corrected}\n"
         return block[:insert_at].rstrip() + f"\n\n### Transcript\n\n{corrected}\n\n" + block[insert_at:]
-    return re.sub(
-        r"(?s)(### Transcript\s*\n\n)(.*?)(?=\n\n---\s*$|\n\n### |\Z)",
-        lambda m: m.group(1) + corrected.strip(),
-        block,
-        count=1,
-    )
+    return TRANSCRIPT_RE.sub(lambda m: m.group(1) + corrected.strip() + "\n\n", block, count=1)
 
 
 def run_correction(
@@ -186,6 +184,7 @@ def run_correction(
     retries: int = 12,
     retry_sleep: float = 30.0,
     timeout: float = 600.0,
+    terms: str = DEFAULT_TERMS,
     resume: bool = True,
 ) -> None:
     api_key = os.environ.get("MIMO_API_KEY")
@@ -196,6 +195,7 @@ def run_correction(
 
     markdown = slides_md.read_text(encoding="utf-8")
     header, sections = parse_sections(markdown)
+    terms = os.environ.get("LECTURE_MD_TERMS", terms)
     output_dir = slides_md.parent
     slides_dir = output_dir / "slides"
     ocr = RapidOCR()
@@ -218,9 +218,8 @@ def run_correction(
         transcript = section["transcript"]
         if slide_id in completed:
             corrected = str(completed[slide_id].get("corrected_transcript", "")).strip()
-            if corrected:
-                corrected_blocks.append(replace_transcript(section["block"], corrected))
-                continue
+            corrected_blocks.append(replace_transcript(section["block"], corrected))
+            continue
 
         image_path = slides_dir / section["image"] if section["image"] else Path()
         ocr_text = ocr_image(ocr, image_path) if section["image"] else ""
@@ -233,6 +232,7 @@ def run_correction(
                 slide_time=section["time"],
                 ocr_text=ocr_text,
                 transcript=transcript,
+                terms=terms,
                 retries=retries,
                 retry_sleep=retry_sleep,
                 timeout=timeout,
@@ -274,6 +274,7 @@ def main() -> None:
     parser.add_argument("--retries", default=12, type=int)
     parser.add_argument("--retry-sleep", default=30.0, type=float)
     parser.add_argument("--timeout", default=600.0, type=float)
+    parser.add_argument("--terms", default=DEFAULT_TERMS)
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
     run_correction(**vars(args))
