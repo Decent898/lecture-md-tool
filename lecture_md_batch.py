@@ -2,7 +2,9 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -102,6 +104,16 @@ def iter_videos(input_dir: Path, today_only: bool, file_glob: str, include_names
     return sorted(videos, key=lambda item: item.stat().st_mtime)
 
 
+def resolve_slidegeist_bin(slidegeist_bin: str) -> str:
+    if slidegeist_bin != "slidegeist":
+        return slidegeist_bin
+    python_scripts_dir = Path(sys.executable).resolve().parent
+    local_bin = python_scripts_dir / ("slidegeist.exe" if os.name == "nt" else "slidegeist")
+    if local_bin.exists():
+        return str(local_bin)
+    return shutil.which("slidegeist") or slidegeist_bin
+
+
 def run_slidegeist(
     *,
     video: Path,
@@ -112,8 +124,9 @@ def run_slidegeist(
     start_offset: str,
     log_path: Path,
 ) -> None:
+    resolved_slidegeist_bin = resolve_slidegeist_bin(slidegeist_bin)
     cmd = [
-        slidegeist_bin,
+        resolved_slidegeist_bin,
         "slides",
         str(video),
         "--out",
