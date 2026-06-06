@@ -13,8 +13,8 @@ DEFAULT_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 DEFAULT_MODEL = "mimo-v2.5-pro"
 DEFAULT_TERMS = (
     "LR(0), LR(1), LALR(1), LL(1), FIRST, FOLLOW, SELECT, 终结符, 非终结符, "
-    "项目集, 规范族, 闭包, GOTO, ACTION, GOTO表, 移进, 规约, 接受, 语法分析, "
-    "自顶向下分析, 自下而上分析, 文法, 产生式, 句柄, 活前缀, 分析栈"
+    "项目集, 规范族, 闭包, GOTO, ACTION, 移进, 规约, 接受, 语法分析, "
+    "自顶向下分析, 自底向上分析, 文法, 产生式, 句柄, 活前缀, 分析栈"
 )
 TRANSCRIPT_RE = re.compile(r"(?ms)^(### Transcript\s*\n+)(.*?)(?=^---\s*$|^### |\Z)")
 
@@ -91,13 +91,16 @@ def call_mimo(
     system = (
         "你是中文课堂讲义转写校对助手。你会根据 PPT 页面 OCR 文本和原始 ASR 转写，"
         "逐页修正老师讲课内容中的识别错误。只做校正，不总结、不扩写、不编造。"
-        "保留老师的讲课口吻和原有信息顺序。重点修正中英混合技术术语、同音错字、标点和断句。"
-        "如果 OCR 和 ASR 冲突，以 ASR 表达的语义为主，以 OCR 作为术语和页面上下文参考。只输出 JSON。"
+        "保留老师讲课的原有信息顺序，重点修正中英混合技术术语、同音错字、标点和断句。"
+        "如果 OCR 和 ASR 冲突，以 ASR 表达的语义为主，以 OCR 作为术语和页面上下文参考。"
+        "只输出严格 JSON。"
     )
     terms_text = terms.strip() or DEFAULT_TERMS
     user = f"""请校正这一页的课堂转写。
+
 固定术语参考：
 {terms_text}
+
 页码：{slide_id}
 时间：{slide_time}
 

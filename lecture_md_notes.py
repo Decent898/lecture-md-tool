@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import re
 import time
 from pathlib import Path
@@ -9,8 +8,7 @@ from typing import Any
 import requests
 
 from lecture_md_correct import DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_TERMS
-from lecture_md_correct import extract_json_object, parse_sections
-from lecture_md_correct import TRANSCRIPT_RE
+from lecture_md_correct import TRANSCRIPT_RE, extract_json_object, parse_sections
 
 
 def load_json_records(path: Path | None) -> dict[str, dict[str, Any]]:
@@ -54,15 +52,15 @@ def call_mimo_note(
         "去掉口头禅、重复、自我修正和课堂杂音，但保留老师讲解中的推理顺序和关键限定。"
         "不要编造 PPT 和转写之外的信息；如果信息不足，要明确保持简略。"
         "数学符号、文法产生式、项目、集合、表项和算法符号必须用 Markdown/LaTeX 格式表达。"
-        "只输出 JSON。"
+        "只输出严格 JSON。"
     )
-    user = f"""请把这一页整理成精炼讲义稿。
+    user = f"""请把这一页整理成精辟讲义稿。
 
 要求：
 - 输出的是“讲义稿”，不要写成逐字稿，也不要写“老师说”。
 - 删除口语化重复，例如“好”“然后呢”“大家看”“这个这个”等。
-- 公式、文法、项目和表项用 Markdown/LaTeX：例如 `$S \\to L = R$`、`$FIRST(\\alpha)$`、`ACTION[i, a]`。
-- 字母、状态号、非终结符、终结符要尽量按 PPT OCR 和上下文校正。
+- 公式、文法、项目和表项用 Markdown/LaTeX，例如 `$S \\to L = R$`、`$FIRST(\\alpha)$`、`ACTION[i, a]`。
+- 字母、状态号、非终结符、终结符尽量按 PPT OCR 和上下文校正。
 - 每页控制在 1 到 4 个短段落或项目符号；复杂页可以稍长。
 - 如果本页没有有效讲解内容，`lecture_note_md` 置为空字符串。
 - 保留原义，不额外扩展知识点。
@@ -182,6 +180,8 @@ def run_notes(
     terms: str = DEFAULT_TERMS,
     resume: bool = True,
 ) -> None:
+    import os
+
     api_key = os.environ.get("MIMO_API_KEY")
     if not api_key:
         raise RuntimeError("Set MIMO_API_KEY.")

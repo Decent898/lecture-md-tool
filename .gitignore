@@ -19,6 +19,10 @@ slides_asr.md
 slides_optimized.md
 asr.json
 optimization.json
+lecture_notes.json
+api_postprocess_manifest.json
+api_postprocess.log
+api_postprocess.pid
 slides_mimo_asr.md
 slides_mimo_asr_corrected.md
 mimo_asr.json

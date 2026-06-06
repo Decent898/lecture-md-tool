@@ -159,6 +159,15 @@ export MIMO_API_KEY="your-key"
 python lecture_md_batch.py --video /path/to/video.mp4 --output-root ./out --asr local --optimize api --notes api
 ```
 
+Post-process completed local ASR folders in parallel while another batch keeps running:
+
+```bash
+export MIMO_API_KEY="your-key"
+python lecture_md_api_postprocess.py --output-root ./out --watch --jobs 2
+```
+
+This watches for stable `slides_asr.md` files, writes `slides_optimized.md` and `slides_lecture_notes.md`, then removes the raw `slides_asr.md` after both final Markdown files are present. Add `--keep-asr-md` if you want to keep the raw ASR Markdown.
+
 Full API mode:
 
 ```bash
