@@ -50,6 +50,9 @@ foreach ($Candidate in $FfmpegCandidates) {
     }
 }
 
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
+
 if ($Courses.Count -eq 0) {
     $Utf8 = [System.Text.Encoding]::UTF8
     $Courses = @(
@@ -58,33 +61,33 @@ if ($Courses.Count -eq 0) {
     )
 }
 
-$IncludeArgs = foreach ($Course in $Courses) {
-    @("--include-name", $Course)
+$BatchArgs = @(
+    $BatchScript,
+    "--input-dir", $InputDir,
+    "--file-glob", "screen_*.mp4",
+    "--output-root", $OutputRoot,
+    "--dedupe-mode", "debounce",
+    "--dedupe-stable-seconds", "$DedupeStableSeconds",
+    "--asr", $Asr,
+    "--optimize", $Optimize,
+    "--notes", $Notes,
+    "--local-asr-model", $LocalAsrModel,
+    "--local-asr-device", $LocalAsrDevice,
+    "--local-asr-compute-type", $LocalAsrComputeType
+)
+
+foreach ($Course in $Courses) {
+    $BatchArgs += @("--include-name", $Course)
 }
 
-$DryRunArgs = @()
 if ($DryRun) {
-    $DryRunArgs = @("--dry-run")
+    $BatchArgs += "--dry-run"
 }
 
-$SkipArgs = @()
 if (-not $NoSkipExisting) {
-    $SkipArgs = @("--skip-existing")
+    $BatchArgs += "--skip-existing"
 }
 
-& $PythonExe $BatchScript `
-    --input-dir $InputDir `
-    --file-glob "screen_*.mp4" `
-    --output-root $OutputRoot `
-    --dedupe-mode debounce `
-    --dedupe-stable-seconds $DedupeStableSeconds `
-    --asr $Asr `
-    --optimize $Optimize `
-    --notes $Notes `
-    --local-asr-model $LocalAsrModel `
-    --local-asr-device $LocalAsrDevice `
-    --local-asr-compute-type $LocalAsrComputeType `
-    @IncludeArgs `
-    @DryRunArgs `
-    @SkipArgs `
-    @ExtraArgs
+$BatchArgs += $ExtraArgs
+
+& $PythonExe @BatchArgs
