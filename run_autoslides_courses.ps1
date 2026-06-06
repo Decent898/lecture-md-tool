@@ -36,6 +36,20 @@ if (Test-Path -LiteralPath $PreferredPython) {
     $PythonExe = $PreferredPython
 }
 
+$FfmpegCandidates = @(
+    "C:\Users\12776\anaconda3\envs\cosyvoice\Library\bin",
+    "$env:USERPROFILE\anaconda3\envs\cosyvoice\Library\bin",
+    "$env:USERPROFILE\scoop\shims",
+    "$env:LOCALAPPDATA\Microsoft\WinGet\Packages"
+)
+
+foreach ($Candidate in $FfmpegCandidates) {
+    if ($Candidate -and (Test-Path -LiteralPath (Join-Path $Candidate "ffmpeg.exe"))) {
+        $env:PATH = "$Candidate;$env:PATH"
+        break
+    }
+}
+
 if ($Courses.Count -eq 0) {
     $Utf8 = [System.Text.Encoding]::UTF8
     $Courses = @(
