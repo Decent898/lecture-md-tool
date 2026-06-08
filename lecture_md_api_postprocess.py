@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import re
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import datetime
@@ -53,6 +54,39 @@ def has_good_file(path: Path) -> bool:
     return path.exists() and path.stat().st_size > 0
 
 
+def json_record_count(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return len(data) if isinstance(data, list) else None
+
+
+def slide_anchor_count(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    markdown = path.read_text(encoding="utf-8", errors="replace")
+    return len(re.findall(r'(?m)^<a name="slide_\d+"></a>\s*$', markdown))
+
+
+def postprocess_complete(out_dir: Path) -> bool:
+    optimized_md = out_dir / "slides_optimized.md"
+    notes_md = out_dir / "slides_lecture_notes.md"
+    anchors = slide_anchor_count(optimized_md)
+    optimization_records = json_record_count(out_dir / "optimization.json")
+    lecture_note_records = json_record_count(out_dir / "lecture_notes.json")
+    return (
+        anchors is not None
+        and anchors > 0
+        and optimization_records == anchors
+        and lecture_note_records == anchors
+        and has_good_file(optimized_md)
+        and has_good_file(notes_md)
+    )
+
+
 def find_candidates(root: Path, stable_seconds: float, overwrite: bool, in_flight: set[Path]) -> list[Path]:
     candidates: list[Path] = []
     for asr_md in sorted(root.glob("*/slides_asr.md"), key=lambda item: item.stat().st_mtime):
@@ -63,7 +97,7 @@ def find_candidates(root: Path, stable_seconds: float, overwrite: bool, in_fligh
             continue
         optimized_md = out_dir / "slides_optimized.md"
         notes_md = out_dir / "slides_lecture_notes.md"
-        if not overwrite and has_good_file(optimized_md) and has_good_file(notes_md):
+        if not overwrite and has_good_file(optimized_md) and has_good_file(notes_md) and postprocess_complete(out_dir):
             continue
         if not has_good_file(out_dir / "asr.json"):
             continue
@@ -139,10 +173,15 @@ def process_dir(args: argparse.Namespace, out_dir: Path) -> dict[str, Any]:
         resume=True,
     )
 
-    if not has_good_file(optimized_md):
-        raise RuntimeError(f"Missing optimized markdown: {optimized_md}")
-    if not has_good_file(notes_md):
-        raise RuntimeError(f"Missing lecture notes markdown: {notes_md}")
+    if not postprocess_complete(out_dir):
+        anchors = slide_anchor_count(optimized_md)
+        optimization_records = json_record_count(optimization_json)
+        lecture_note_records = json_record_count(lecture_notes_json)
+        raise RuntimeError(
+            "Postprocess output is incomplete: "
+            f"slides={anchors}, optimization_records={optimization_records}, "
+            f"lecture_note_records={lecture_note_records}"
+        )
     if not args.keep_asr_md:
         asr_md.unlink(missing_ok=True)
 
