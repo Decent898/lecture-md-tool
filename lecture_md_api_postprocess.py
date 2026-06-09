@@ -74,14 +74,22 @@ def slide_anchor_count(path: Path) -> int | None:
 def postprocess_complete(out_dir: Path) -> bool:
     optimized_md = out_dir / "slides_optimized.md"
     notes_md = out_dir / "slides_lecture_notes.md"
-    anchors = slide_anchor_count(optimized_md)
+    source_count = (
+        slide_anchor_count(out_dir / "slides_asr.md")
+        or json_record_count(out_dir / "asr.json")
+        or slide_anchor_count(out_dir / "slides.md")
+    )
+    optimized_anchors = slide_anchor_count(optimized_md)
+    note_anchors = slide_anchor_count(notes_md)
     optimization_records = json_record_count(out_dir / "optimization.json")
     lecture_note_records = json_record_count(out_dir / "lecture_notes.json")
     return (
-        anchors is not None
-        and anchors > 0
-        and optimization_records == anchors
-        and lecture_note_records == anchors
+        source_count is not None
+        and source_count > 0
+        and optimized_anchors == source_count
+        and note_anchors == source_count
+        and optimization_records == source_count
+        and lecture_note_records == source_count
         and has_good_file(optimized_md)
         and has_good_file(notes_md)
     )
@@ -174,12 +182,19 @@ def process_dir(args: argparse.Namespace, out_dir: Path) -> dict[str, Any]:
     )
 
     if not postprocess_complete(out_dir):
-        anchors = slide_anchor_count(optimized_md)
+        source_count = (
+            slide_anchor_count(asr_md)
+            or json_record_count(asr_json)
+            or slide_anchor_count(out_dir / "slides.md")
+        )
+        optimized_anchors = slide_anchor_count(optimized_md)
+        note_anchors = slide_anchor_count(notes_md)
         optimization_records = json_record_count(optimization_json)
         lecture_note_records = json_record_count(lecture_notes_json)
         raise RuntimeError(
             "Postprocess output is incomplete: "
-            f"slides={anchors}, optimization_records={optimization_records}, "
+            f"source_slides={source_count}, optimized_anchors={optimized_anchors}, "
+            f"note_anchors={note_anchors}, optimization_records={optimization_records}, "
             f"lecture_note_records={lecture_note_records}"
         )
     if not args.keep_asr_md:
