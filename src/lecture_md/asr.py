@@ -1,61 +1,17 @@
+"""Per-slide ASR: cut audio with ffmpeg, transcribe via API or local Whisper."""
+
 import argparse
 import base64
 import json
-import os
-import re
 import subprocess
 import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
-import requests
-
-
-DEFAULT_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
-DEFAULT_MODEL = "mimo-v2.5-asr"
-TIMESTAMP_RE = r"(?:\d{1,2}:)?\d+:\d{2}"
-TRANSCRIPT_RE = re.compile(r"(?ms)^(### Transcript\s*\n+)(.*?)(?=^---\s*$|^### |\Z)")
-
-
-def timestamp_to_seconds(text: str) -> float:
-    parts = [int(part) for part in text.strip().split(":")]
-    if len(parts) == 2:
-        return parts[0] * 60 + parts[1]
-    if len(parts) == 3:
-        return parts[0] * 3600 + parts[1] * 60 + parts[2]
-    raise ValueError(f"Unsupported timestamp: {text}")
-
-
-def parse_sections(markdown: str) -> tuple[str, list[dict[str, Any]]]:
-    matches = list(re.finditer(r'(?m)^<a name="(slide_\d+)"></a>\s*$', markdown))
-    if not matches:
-        raise ValueError("No slide anchors found.")
-    header = markdown[: matches[0].start()]
-    sections: list[dict[str, Any]] = []
-    for idx, match in enumerate(matches):
-        start = match.start()
-        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(markdown)
-        block = markdown[start:end]
-        time_match = re.search(rf"\*\*Time:\*\*\s*({TIMESTAMP_RE})\s*-\s*({TIMESTAMP_RE})", block)
-        image_match = re.search(r"\[!\[Slide\]\(slides/([^)]+)\)\]\(slides/[^)]+\)", block)
-        transcript_match = TRANSCRIPT_RE.search(block)
-        if not time_match:
-            raise ValueError(f"No time range found for {match.group(1)}")
-        t_start = timestamp_to_seconds(time_match.group(1))
-        t_end = timestamp_to_seconds(time_match.group(2))
-        sections.append(
-            {
-                "slide_id": match.group(1),
-                "block": block,
-                "time": f"{time_match.group(1)} - {time_match.group(2)}",
-                "start": t_start,
-                "end": t_end,
-                "image": image_match.group(1) if image_match else "",
-                "original_transcript": transcript_match.group(2).strip() if transcript_match else "",
-            }
-        )
-    return header, sections
+from lecture_md import config
+from lecture_md.client import chat_completions, message_content
+from lecture_md.slides_md import parse_sections, replace_transcript
 
 
 def extract_audio(video: Path, start: float, end: float, out_wav: Path) -> None:
@@ -80,7 +36,7 @@ def extract_audio(video: Path, start: float, end: float, out_wav: Path) -> None:
     subprocess.run(cmd, check=True, capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
-def call_mimo_asr(
+def call_api_asr(
     base_url: str,
     api_key: str,
     model: str,
@@ -89,6 +45,7 @@ def call_mimo_asr(
     retries: int,
     retry_sleep: float,
 ) -> dict[str, Any]:
+    """Transcribe one audio chunk through a chat model that accepts input_audio."""
     data_url = "data:audio/wav;base64," + base64.b64encode(wav_path.read_bytes()).decode("ascii")
     payload = {
         "model": model,
@@ -105,39 +62,24 @@ def call_mimo_asr(
         ],
         "max_tokens": 4096,
     }
-    url = f"{base_url.rstrip('/')}/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    response = None
-    for attempt in range(retries + 1):
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=300)
-        except (requests.Timeout, requests.ConnectionError) as exc:
-            if attempt >= retries:
-                raise
-            wait = retry_sleep * (attempt + 1)
-            print(f"  request failed ({exc}); retrying in {wait:.0f}s", flush=True)
-            time.sleep(wait)
-            continue
-        if response.status_code not in {429, 500, 502, 503, 504}:
-            break
-        if attempt >= retries:
-            break
-        wait = retry_sleep * (attempt + 1)
-        print(f"  HTTP {response.status_code}; retrying in {wait:.0f}s", flush=True)
-        time.sleep(wait)
-    assert response is not None
-    if response.status_code >= 400:
-        raise RuntimeError(f"MiMo ASR HTTP {response.status_code}: {response.text[:1000]}")
-    result = response.json()
-    content = result["choices"][0]["message"].get("content") or ""
-    return {"transcript": content.strip(), "metadata": result.get("usage", {}), "raw": result}
+    result = chat_completions(
+        base_url=base_url,
+        api_key=api_key,
+        payload=payload,
+        retries=retries,
+        retry_sleep=retry_sleep,
+        timeout=300,
+    )
+    return {"transcript": message_content(result), "metadata": result.get("usage", {}), "raw": result}
 
 
 def load_local_whisper(model_name: str, device: str, compute_type: str) -> Any:
     try:
         from faster_whisper import WhisperModel
     except ImportError as exc:
-        raise RuntimeError("Local ASR requires faster-whisper. Install it with: pip install faster-whisper") from exc
+        raise RuntimeError(
+            "Local ASR requires faster-whisper. Install it with: pip install 'lecture-md-tool[local]'"
+        ) from exc
     return WhisperModel(model_name, device=device, compute_type=compute_type)
 
 
@@ -177,20 +119,12 @@ def merge_numeric_metadata(items: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def record_transcript(record: dict[str, Any]) -> str:
-    for key in ("asr_transcript", "mimo_asr_transcript", "local_asr_transcript"):
+    # Legacy key names are still read so old runs can be resumed.
+    for key in ("asr_transcript", "api_asr_transcript", "mimo_asr_transcript", "local_asr_transcript"):
         transcript = str(record.get(key, "")).strip()
         if transcript:
             return transcript
     return ""
-
-
-def replace_transcript(block: str, transcript: str) -> str:
-    if "### Transcript" not in block:
-        insert_at = block.rfind("\n---")
-        if insert_at == -1:
-            return block.rstrip() + f"\n\n### Transcript\n\n{transcript}\n"
-        return block[:insert_at].rstrip() + f"\n\n### Transcript\n\n{transcript}\n\n" + block[insert_at:]
-    return TRANSCRIPT_RE.sub(lambda m: m.group(1) + transcript.strip() + "\n\n", block, count=1)
 
 
 def normalize_backend(backend: str) -> str:
@@ -209,8 +143,8 @@ def run_asr(
     out_md: Path,
     out_json: Path,
     backend: str = "api",
-    base_url: str = DEFAULT_BASE_URL,
-    model: str = DEFAULT_MODEL,
+    base_url: str | None = None,
+    model: str | None = None,
     language: str = "zh",
     local_model: str = "small",
     local_device: str = "cpu",
@@ -224,9 +158,9 @@ def run_asr(
     resume: bool = True,
 ) -> None:
     backend = normalize_backend(backend)
-    api_key = os.environ.get("MIMO_API_KEY") if backend == "api" else None
-    if backend == "api" and not api_key:
-        raise RuntimeError("Set MIMO_API_KEY or use --asr local.")
+    base_url = base_url or config.default_base_url()
+    model = model or config.default_asr_model()
+    api_key = config.require_api_key() if backend == "api" else None
 
     whisper_model = None
     if backend == "local":
@@ -234,7 +168,7 @@ def run_asr(
         whisper_model = load_local_whisper(local_model, local_device, local_compute_type)
 
     markdown = slides_md.read_text(encoding="utf-8")
-    header, sections = parse_sections(markdown)
+    header, sections = parse_sections(markdown, require_time_range=True)
     records: list[dict[str, Any]] = []
     completed: dict[str, dict[str, Any]] = {}
     if resume and out_json.exists():
@@ -268,7 +202,7 @@ def run_asr(
                 extract_audio(video, chunk_start, chunk_end, chunk_path)
                 if backend == "api":
                     assert api_key is not None
-                    asr = call_mimo_asr(
+                    asr = call_api_asr(
                         base_url,
                         api_key,
                         model,
@@ -300,14 +234,14 @@ def run_asr(
                 "end": section["end"],
                 "image": section["image"],
                 "asr_backend": backend,
-                "previous_transcript": section["original_transcript"],
+                "previous_transcript": section["transcript"],
                 "asr_transcript": transcript,
                 "chunk_metadata": chunk_metadata,
                 "metadata": merge_numeric_metadata(chunk_metadata),
             }
             if backend == "api":
-                record["mimo_asr_model"] = model
-                record["mimo_asr_transcript"] = transcript
+                record["api_asr_model"] = model
+                record["api_asr_transcript"] = transcript
             else:
                 record["local_asr_model"] = local_model
                 record["local_asr_language"] = language
@@ -320,15 +254,14 @@ def run_asr(
     out_json.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
+def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--video", required=True, type=Path)
     parser.add_argument("--slides-md", required=True, type=Path)
     parser.add_argument("--out-md", required=True, type=Path)
     parser.add_argument("--out-json", required=True, type=Path)
     parser.add_argument("--asr", choices=["api", "local"], default="api")
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--base-url", default=None, help="OpenAI-compatible API base URL.")
+    parser.add_argument("--model", default=None, help="Audio-capable chat model name.")
     parser.add_argument("--asr-language", default="zh")
     parser.add_argument("--local-asr-model", default="small")
     parser.add_argument("--local-asr-device", default="cpu")
@@ -340,7 +273,9 @@ def main() -> None:
     parser.add_argument("--retries", default=12, type=int)
     parser.add_argument("--retry-sleep", default=30.0, type=float)
     parser.add_argument("--resume", action="store_true")
-    args = parser.parse_args()
+
+
+def run_cli(args: argparse.Namespace) -> None:
     run_asr(
         video=args.video,
         slides_md=args.slides_md,
@@ -361,7 +296,3 @@ def main() -> None:
         retry_sleep=args.retry_sleep,
         resume=args.resume,
     )
-
-
-if __name__ == "__main__":
-    main()

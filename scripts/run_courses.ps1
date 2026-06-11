@@ -1,6 +1,15 @@
+# Batch-process recurring course recordings (e.g. AutoSlides screen captures).
+# Generic example: pass your own input folder, filename glob, and course-name filters.
+#
+# Examples:
+#   .\scripts\run_courses.ps1 -InputDir "E:\AutoSlides" -DryRun
+#   .\scripts\run_courses.ps1 -InputDir "E:\AutoSlides" -Courses "计算机组成","软件工程"
+#   .\scripts\run_courses.ps1 -InputDir "D:\Recordings" -FileGlob "*.mp4" -Asr local -Optimize none -Notes none
 param(
-    [string]$InputDir = "E:\AutoSlides",
-    [string]$OutputRoot = "$env:USERPROFILE\Documents\lecture_md_runs\autoslides_courses",
+    [Parameter(Mandatory = $true)]
+    [string]$InputDir,
+    [string]$OutputRoot = "$env:USERPROFILE\Documents\lecture_md_runs\courses",
+    [string]$FileGlob = "screen_*.mp4",
     [string[]]$Courses = @(),
     [ValidateSet("api", "local")]
     [string]$Asr = "local",
@@ -26,47 +35,18 @@ if (-not (Test-Path -LiteralPath $InputDir)) {
     throw "Input directory not found: $InputDir"
 }
 
-if (($Asr -eq "api" -or $Optimize -eq "api" -or $Notes -eq "api") -and -not $env:MIMO_API_KEY) {
-    throw "Set MIMO_API_KEY first, or run with -Asr local -Optimize none -Notes none."
-}
-
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$BatchScript = Join-Path $ScriptDir "lecture_md_batch.py"
-$PreferredPython = Join-Path (Split-Path -Parent $ScriptDir) ".venv-slidegeist\Scripts\python.exe"
-$PythonExe = "python"
-if (Test-Path -LiteralPath $PreferredPython) {
-    $PythonExe = $PreferredPython
-}
-
-$FfmpegCandidates = @(
-    "C:\Users\12776\anaconda3\envs\cosyvoice\Library\bin",
-    "$env:USERPROFILE\anaconda3\envs\cosyvoice\Library\bin",
-    "$env:USERPROFILE\scoop\shims",
-    "$env:LOCALAPPDATA\Microsoft\WinGet\Packages"
-)
-
-foreach ($Candidate in $FfmpegCandidates) {
-    if ($Candidate -and (Test-Path -LiteralPath (Join-Path $Candidate "ffmpeg.exe"))) {
-        $env:PATH = "$Candidate;$env:PATH"
-        break
-    }
+if (($Asr -eq "api" -or $Optimize -eq "api" -or $Notes -eq "api") -and
+    -not ($env:LECTURE_MD_API_KEY -or $env:OPENAI_API_KEY -or $env:MIMO_API_KEY)) {
+    throw "Set LECTURE_MD_API_KEY (or OPENAI_API_KEY) first, or run with -Asr local -Optimize none -Notes none."
 }
 
 $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 
-if ($Courses.Count -eq 0) {
-    $Utf8 = [System.Text.Encoding]::UTF8
-    $Courses = @(
-        $Utf8.GetString([System.Convert]::FromBase64String("6K6h566X5py657uE5oiQ5LiO5L2T57O757uT5p6E")),
-        $Utf8.GetString([System.Convert]::FromBase64String("6L2v5Lu25bel56iL5Z+656GA"))
-    )
-}
-
 $BatchArgs = @(
-    $BatchScript,
+    "-m", "lecture_md", "process",
     "--input-dir", $InputDir,
-    "--file-glob", "screen_*.mp4",
+    "--file-glob", $FileGlob,
     "--output-root", $OutputRoot,
     "--scene-threshold", $SceneThreshold,
     "--min-scene-len", $MinSceneLen,
@@ -94,4 +74,4 @@ if (-not $NoSkipExisting) {
 
 $BatchArgs += $ExtraArgs
 
-& $PythonExe @BatchArgs
+python @BatchArgs

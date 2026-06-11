@@ -1,3 +1,5 @@
+# Process one lecture video. Usage:
+#   .\scripts\run_one.ps1 -Video "C:\path\to\video.mp4" -OutputRoot ".\out" [extra args]
 param(
     [Parameter(Mandatory = $true)]
     [string]$Video,
@@ -9,5 +11,4 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-python (Join-Path $ScriptDir "lecture_md_batch.py") --video $Video --output-root $OutputRoot @ExtraArgs
+python -m lecture_md process --video $Video --output-root $OutputRoot @ExtraArgs

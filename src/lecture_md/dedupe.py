@@ -1,3 +1,5 @@
+"""Slide cut cleanup: debounce or merge unstable slidegeist slide cuts."""
+
 import argparse
 import json
 import re
@@ -8,8 +10,7 @@ from typing import Any
 
 from PIL import Image, ImageChops, ImageStat
 
-
-TIMESTAMP_RE = r"(?:\d{1,2}:)?\d+:\d{2}"
+from lecture_md.slides_md import TIMESTAMP_RE, seconds_to_timestamp, timestamp_to_seconds
 
 
 @dataclass
@@ -27,24 +28,6 @@ class SlideSection:
 class ImageSignature:
     dhash: int
     thumb: Image.Image
-
-
-def timestamp_to_seconds(text: str) -> float:
-    parts = [int(part) for part in text.strip().split(":")]
-    if len(parts) == 2:
-        return parts[0] * 60 + parts[1]
-    if len(parts) == 3:
-        return parts[0] * 3600 + parts[1] * 60 + parts[2]
-    raise ValueError(f"Unsupported timestamp: {text}")
-
-
-def seconds_to_timestamp(seconds: float) -> str:
-    rounded = max(int(round(seconds)), 0)
-    hours, remainder = divmod(rounded, 3600)
-    minutes, secs = divmod(remainder, 60)
-    if hours:
-        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-    return f"{minutes:02d}:{secs:02d}"
 
 
 def parse_slides(markdown: str) -> tuple[str, list[SlideSection]]:
@@ -103,16 +86,6 @@ def rmsdiff(left: Image.Image, right: Image.Image) -> float:
     diff = ImageChops.difference(left, right)
     stat = ImageStat.Stat(diff)
     return sum(value * value for value in stat.rms) ** 0.5 / len(stat.rms)
-
-
-def same_slide(
-    current: ImageSignature,
-    previous: ImageSignature,
-    *,
-    max_hash_distance: int,
-    max_rms: float,
-) -> bool:
-    return hamming_distance(current.dhash, previous.dhash) <= max_hash_distance or rmsdiff(current.thumb, previous.thumb) <= max_rms
 
 
 def visual_metrics(current: ImageSignature, previous: ImageSignature) -> dict[str, float | int]:
@@ -358,8 +331,7 @@ def dedupe_slides(
     return summary
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
+def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--slides-md", required=True, type=Path)
     parser.add_argument("--out-md", required=True, type=Path)
     parser.add_argument("--out-json", required=True, type=Path)
@@ -371,7 +343,9 @@ def main() -> None:
     parser.add_argument("--max-slide-seconds", default=300.0, type=float)
     parser.add_argument("--crop-ratio", default=0.04, type=float)
     parser.add_argument("--no-keep-raw", action="store_true")
-    args = parser.parse_args()
+
+
+def run_cli(args: argparse.Namespace) -> None:
     summary = dedupe_slides(
         slides_md=args.slides_md,
         out_md=args.out_md,
@@ -386,7 +360,3 @@ def main() -> None:
         keep_raw=not args.no_keep_raw,
     )
     print(f"Slides: {summary['input_slides']} -> {summary['output_slides']}", flush=True)
-
-
-if __name__ == "__main__":
-    main()

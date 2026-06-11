@@ -1,47 +1,14 @@
+"""ASR correction: OCR each slide, then fix transcripts with a chat model."""
+
 import argparse
 import json
-import os
-import re
 import time
 from pathlib import Path
 from typing import Any
 
-import requests
-
-
-DEFAULT_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
-DEFAULT_MODEL = "mimo-v2.5-pro"
-DEFAULT_TERMS = (
-    "LR(0), LR(1), LALR(1), LL(1), FIRST, FOLLOW, SELECT, 终结符, 非终结符, "
-    "项目集, 规范族, 闭包, GOTO, ACTION, 移进, 规约, 接受, 语法分析, "
-    "自顶向下分析, 自底向上分析, 文法, 产生式, 句柄, 活前缀, 分析栈"
-)
-TRANSCRIPT_RE = re.compile(r"(?ms)^(### Transcript\s*\n+)(.*?)(?=^---\s*$|^### |\Z)")
-
-
-def parse_sections(markdown: str) -> tuple[str, list[dict[str, Any]]]:
-    matches = list(re.finditer(r'(?m)^<a name="(slide_\d+)"></a>\s*$', markdown))
-    if not matches:
-        raise ValueError("No slide anchors found in markdown.")
-    header = markdown[: matches[0].start()]
-    sections: list[dict[str, Any]] = []
-    for idx, match in enumerate(matches):
-        start = match.start()
-        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(markdown)
-        block = markdown[start:end]
-        image_match = re.search(r"\[!\[Slide\]\(slides/([^)]+)\)\]\(slides/[^)]+\)", block)
-        time_match = re.search(r"\*\*Time:\*\*\s*([^\n]+)", block)
-        transcript_match = TRANSCRIPT_RE.search(block)
-        sections.append(
-            {
-                "slide_id": match.group(1),
-                "block": block,
-                "image": image_match.group(1) if image_match else "",
-                "time": time_match.group(1).strip() if time_match else "",
-                "transcript": transcript_match.group(2).strip() if transcript_match else "",
-            }
-        )
-    return header, sections
+from lecture_md import config
+from lecture_md.client import chat_completions, message_content
+from lecture_md.slides_md import extract_json_object, parse_sections, replace_transcript
 
 
 def ocr_image(ocr: Any, image_path: Path) -> str:
@@ -59,22 +26,18 @@ def ocr_image(ocr: Any, image_path: Path) -> str:
     return "\n".join(lines)
 
 
-def extract_json_object(text: str) -> dict[str, Any]:
-    text = text.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*", "", text)
-        text = re.sub(r"\s*```$", "", text)
+def load_ocr_engine() -> Any:
     try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    match = re.search(r"\{.*\}", text, flags=re.S)
-    if not match:
-        raise ValueError(f"No JSON object found in response: {text[:200]}")
-    return json.loads(match.group(0))
+        from rapidocr_onnxruntime import RapidOCR
+    except ImportError as exc:
+        raise RuntimeError(
+            "OCR-assisted correction requires rapidocr-onnxruntime. "
+            "Install it with: pip install rapidocr-onnxruntime"
+        ) from exc
+    return RapidOCR()
 
 
-def call_mimo(
+def call_correction(
     *,
     base_url: str,
     api_key: str,
@@ -89,19 +52,17 @@ def call_mimo(
     timeout: float,
 ) -> dict[str, Any]:
     system = (
-        "你是中文课堂讲义转写校对助手。你会根据 PPT 页面 OCR 文本和原始 ASR 转写，"
+        "你是课堂讲义转写校对助手。你会根据 PPT 页面 OCR 文本和原始 ASR 转写，"
         "逐页修正老师讲课内容中的识别错误。只做校正，不总结、不扩写、不编造。"
         "保留老师讲课的原有信息顺序，重点修正中英混合技术术语、同音错字、标点和断句。"
         "如果 OCR 和 ASR 冲突，以 ASR 表达的语义为主，以 OCR 作为术语和页面上下文参考。"
         "只输出严格 JSON。"
     )
-    terms_text = terms.strip() or DEFAULT_TERMS
+    terms_text = terms.strip()
+    terms_section = f"固定术语参考：\n{terms_text}\n\n" if terms_text else ""
     user = f"""请校正这一页的课堂转写。
 
-固定术语参考：
-{terms_text}
-
-页码：{slide_id}
+{terms_section}页码：{slide_id}
 时间：{slide_time}
 
 PPT OCR 文本：
@@ -122,33 +83,18 @@ PPT OCR 文本：
         "temperature": 0,
         "max_tokens": 8192,
     }
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    url = f"{base_url.rstrip('/')}/chat/completions"
-    response = None
-    for attempt in range(retries + 1):
-        try:
-            response = requests.post(url, headers=headers, json=payload, timeout=timeout)
-        except (requests.Timeout, requests.ConnectionError) as exc:
-            if attempt >= retries:
-                raise
-            wait = retry_sleep * (attempt + 1)
-            print(f"  request failed ({exc}); retrying in {wait:.0f}s", flush=True)
-            time.sleep(wait)
-            continue
-        if response.status_code not in {429, 500, 502, 503, 504}:
-            break
-        if attempt >= retries:
-            break
-        wait = retry_sleep * (attempt + 1)
-        print(f"  HTTP {response.status_code}; retrying in {wait:.0f}s", flush=True)
-        time.sleep(wait)
-    assert response is not None
-    response.raise_for_status()
-    data = response.json()
-    content = (data["choices"][0]["message"].get("content") or "").strip()
+    data = chat_completions(
+        base_url=base_url,
+        api_key=api_key,
+        payload=payload,
+        retries=retries,
+        retry_sleep=retry_sleep,
+        timeout=timeout,
+    )
+    content = message_content(data)
     if not content:
         snippet = json.dumps(data, ensure_ascii=False)[:500]
-        raise ValueError(f"Empty MiMo content for {slide_id}: {snippet}")
+        raise ValueError(f"Empty model content for {slide_id}: {snippet}")
     try:
         parsed = extract_json_object(content)
         corrected = str(parsed.get("corrected_transcript", "")).strip()
@@ -167,41 +113,30 @@ PPT OCR 文本：
     }
 
 
-def replace_transcript(block: str, corrected: str) -> str:
-    if "### Transcript" not in block:
-        insert_at = block.rfind("\n---")
-        if insert_at == -1:
-            return block.rstrip() + f"\n\n### Transcript\n\n{corrected}\n"
-        return block[:insert_at].rstrip() + f"\n\n### Transcript\n\n{corrected}\n\n" + block[insert_at:]
-    return TRANSCRIPT_RE.sub(lambda m: m.group(1) + corrected.strip() + "\n\n", block, count=1)
-
-
 def run_correction(
     *,
     slides_md: Path,
     out_md: Path,
     out_json: Path,
-    base_url: str = DEFAULT_BASE_URL,
-    model: str = DEFAULT_MODEL,
+    base_url: str | None = None,
+    model: str | None = None,
     sleep: float = 5.0,
     retries: int = 12,
     retry_sleep: float = 30.0,
     timeout: float = 600.0,
-    terms: str = DEFAULT_TERMS,
+    terms: str | None = None,
     resume: bool = True,
 ) -> None:
-    api_key = os.environ.get("MIMO_API_KEY")
-    if not api_key:
-        raise RuntimeError("Set MIMO_API_KEY.")
-
-    from rapidocr_onnxruntime import RapidOCR
+    api_key = config.require_api_key()
+    base_url = base_url or config.default_base_url()
+    model = model or config.default_chat_model()
+    terms = terms if terms is not None else config.default_terms()
 
     markdown = slides_md.read_text(encoding="utf-8")
     header, sections = parse_sections(markdown)
-    terms = os.environ.get("LECTURE_MD_TERMS", terms)
     output_dir = slides_md.parent
     slides_dir = output_dir / "slides"
-    ocr = RapidOCR()
+    ocr = load_ocr_engine()
 
     corrections: list[dict[str, Any]] = []
     completed: dict[str, dict[str, Any]] = {}
@@ -227,7 +162,7 @@ def run_correction(
         image_path = slides_dir / section["image"] if section["image"] else Path()
         ocr_text = ocr_image(ocr, image_path) if section["image"] else ""
         if transcript:
-            result = call_mimo(
+            result = call_correction(
                 base_url=base_url,
                 api_key=api_key,
                 model=model,
@@ -266,22 +201,31 @@ def run_correction(
     out_json.write_text(json.dumps(corrections, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
+def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--slides-md", required=True, type=Path)
     parser.add_argument("--out-md", required=True, type=Path)
     parser.add_argument("--out-json", required=True, type=Path)
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--base-url", default=None, help="OpenAI-compatible API base URL.")
+    parser.add_argument("--model", default=None, help="Chat model name.")
     parser.add_argument("--sleep", default=5.0, type=float)
     parser.add_argument("--retries", default=12, type=int)
     parser.add_argument("--retry-sleep", default=30.0, type=float)
     parser.add_argument("--timeout", default=600.0, type=float)
-    parser.add_argument("--terms", default=DEFAULT_TERMS)
+    parser.add_argument("--terms", default=None, help="Comma-separated domain terms.")
     parser.add_argument("--resume", action="store_true")
-    args = parser.parse_args()
-    run_correction(**vars(args))
 
 
-if __name__ == "__main__":
-    main()
+def run_cli(args: argparse.Namespace) -> None:
+    run_correction(
+        slides_md=args.slides_md,
+        out_md=args.out_md,
+        out_json=args.out_json,
+        base_url=args.base_url,
+        model=args.model,
+        sleep=args.sleep,
+        retries=args.retries,
+        retry_sleep=args.retry_sleep,
+        timeout=args.timeout,
+        terms=args.terms,
+        resume=args.resume,
+    )

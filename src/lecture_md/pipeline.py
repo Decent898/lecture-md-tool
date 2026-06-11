@@ -1,3 +1,5 @@
+"""End-to-end pipeline: slide extraction -> dedupe -> ASR -> correction -> notes."""
+
 import argparse
 import json
 import os
@@ -8,20 +10,17 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from lecture_md_asr import DEFAULT_BASE_URL as DEFAULT_ASR_BASE_URL
-from lecture_md_asr import run_asr
-from lecture_md_correct import DEFAULT_BASE_URL as DEFAULT_OPTIMIZE_BASE_URL
-from lecture_md_correct import DEFAULT_TERMS
-from lecture_md_correct import run_correction
-from lecture_md_dedupe import dedupe_slides
-from lecture_md_notes import run_notes
+from lecture_md import config
+from lecture_md.asr import run_asr
+from lecture_md.correct import run_correction
+from lecture_md.dedupe import dedupe_slides
+from lecture_md.notes import run_notes
 
 
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v"}
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Convert lecture videos to slide-aligned Markdown notes.")
+def add_arguments(parser: argparse.ArgumentParser) -> None:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--video", type=Path, help="Process one video file.")
     source.add_argument("--input-dir", type=Path, help="Process videos in a directory.")
@@ -43,7 +42,7 @@ def parse_args() -> argparse.Namespace:
         "--dedupe-mode",
         choices=["debounce", "merge"],
         default="debounce",
-        help="Slide cleanup mode: AutoSlides-style debounce, or older aggressive visual merge.",
+        help="Slide cleanup mode: conservative debounce, or older aggressive visual merge.",
     )
     parser.add_argument("--dedupe-hash-distance", default=6, type=int)
     parser.add_argument("--dedupe-rms", default=4.0, type=float)
@@ -56,17 +55,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--dedupe-max-slide-seconds", default=300.0, type=float)
     parser.add_argument("--dedupe-crop-ratio", default=0.04, type=float)
-    parser.add_argument("--asr", choices=["api", "local"], default="api", help="ASR backend: MiMo API or local Whisper.")
+    parser.add_argument("--asr", choices=["api", "local"], default="api", help="ASR backend: API or local Whisper.")
     parser.add_argument("--optimize", choices=["api", "none"], default="api", help="Language optimization backend.")
     parser.add_argument("--notes", choices=["api", "none"], default="none", help="Generate cleaned lecture notes.")
-    parser.add_argument("--asr-base-url", default=DEFAULT_ASR_BASE_URL, help="ASR API base URL when --asr api.")
-    parser.add_argument(
-        "--optimize-base-url",
-        default=DEFAULT_OPTIMIZE_BASE_URL,
-        help="Optimization API base URL when --optimize api.",
-    )
-    parser.add_argument("--asr-model", default="mimo-v2.5-asr", help="MiMo ASR model when --asr api.")
-    parser.add_argument("--optimize-model", default="mimo-v2.5-pro", help="MiMo text model when --optimize api.")
+    parser.add_argument("--asr-base-url", default=None, help="ASR API base URL when --asr api.")
+    parser.add_argument("--optimize-base-url", default=None, help="Optimization API base URL when --optimize api.")
+    parser.add_argument("--asr-model", default=None, help="Audio-capable chat model when --asr api.")
+    parser.add_argument("--optimize-model", default=None, help="Text chat model when --optimize api or --notes api.")
     parser.add_argument("--asr-language", default="zh", help="ASR language code, or auto for local auto-detect.")
     parser.add_argument("--local-asr-model", default="small", help="faster-whisper model name for --asr local.")
     parser.add_argument("--local-asr-device", default="cpu", help="faster-whisper device: cpu, cuda, or auto.")
@@ -78,10 +73,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--retries", default=12, type=int)
     parser.add_argument("--retry-sleep", default=30.0, type=float)
     parser.add_argument("--timeout", default=600.0, type=float)
-    parser.add_argument("--terms", default=DEFAULT_TERMS, help="Course/domain terms for API language optimization.")
+    parser.add_argument("--terms", default=None, help="Course/domain terms for API language optimization.")
     parser.add_argument("--skip-existing", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="Print selected videos and exit without processing.")
-    return parser.parse_args()
 
 
 def safe_name(path: Path) -> str:
@@ -190,16 +184,13 @@ def process_video(args: argparse.Namespace, video: Path) -> dict:
             crop_ratio=args.dedupe_crop_ratio,
             keep_raw=True,
         )
-        with log_path.open("a", encoding="utf-8") as log:
-            log.write(
-                f"\nDeduped slides: {summary['input_slides']} -> {summary['output_slides']} "
-                f"(merged {summary['merged_slides']})\n"
-            )
-        print(
+        message = (
             f"Deduped slides: {summary['input_slides']} -> {summary['output_slides']} "
-            f"(merged {summary['merged_slides']})",
-            flush=True,
+            f"(merged {summary['merged_slides']})"
         )
+        with log_path.open("a", encoding="utf-8") as log:
+            log.write("\n" + message + "\n")
+        print(message, flush=True)
     run_asr(
         video=video,
         slides_md=slides_md,
@@ -272,18 +263,18 @@ def write_index(output_root: Path, records: list[dict]) -> None:
     output_root.joinpath("index.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def main() -> None:
-    args = parse_args()
-    if (args.asr == "api" or args.optimize == "api" or args.notes == "api") and not os.environ.get("MIMO_API_KEY"):
-        raise RuntimeError("Set MIMO_API_KEY, or use --asr local --optimize none.")
-
-    args.output_root.mkdir(parents=True, exist_ok=True)
+def run_cli(args: argparse.Namespace) -> None:
     videos = [args.video] if args.video else iter_videos(args.input_dir, args.today, args.file_glob, args.include_name)
     if args.dry_run:
         for video in videos:
             print(video, flush=True)
         print(f"Selected {len(videos)} video(s).", flush=True)
         return
+
+    if (args.asr == "api" or args.optimize == "api" or args.notes == "api") and not config.get_api_key():
+        raise RuntimeError(config.API_KEY_HINT)
+
+    args.output_root.mkdir(parents=True, exist_ok=True)
     records: list[dict] = []
     manifest_path = args.output_root / "manifest.json"
 
@@ -299,7 +290,3 @@ def main() -> None:
     write_index(args.output_root, records)
     print(f"Wrote {manifest_path}", flush=True)
     print(f"Wrote {args.output_root / 'index.md'}", flush=True)
-
-
-if __name__ == "__main__":
-    main()

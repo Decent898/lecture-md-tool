@@ -1,4 +1,0 @@
-requests>=2.31
-rapidocr-onnxruntime>=1.4.4
-slidegeist>=2026.4.23
-Pillow>=10.0

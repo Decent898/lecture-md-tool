@@ -1,32 +1,37 @@
+# Python
 .venv/
 venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+build/
+dist/
+*.egg-info/
+
+# Secrets
 .env
 *.env
 
 # Generated outputs
 out/
 output/
-batch_mimo_today/
-slidegeist_process_*/
+lecture_md_out/
+lecture_md_runs/
 slides/
 slides.md
 slides_raw.md
 slides_dedupe.json
 slides_asr.md
 slides_optimized.md
+slides_lecture_notes.md
 asr.json
 optimization.json
 lecture_notes.json
 api_postprocess_manifest.json
 api_postprocess.log
 api_postprocess.pid
-slides_mimo_asr.md
-slides_mimo_asr_corrected.md
-mimo_asr.json
-mimo_asr_corrections.json
+manifest.json
+index.md
 batch.log
 
 # Media inputs and temporary audio
@@ -38,3 +43,4 @@ batch.log
 *.webm
 *.m4v
 *.wav
+*.t

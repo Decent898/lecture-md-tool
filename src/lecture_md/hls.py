@@ -1,19 +1,18 @@
+"""Merge local HLS .ts segment folders into .mp4 files with ffmpeg."""
+
 import argparse
-import os
 import re
 import subprocess
 import tempfile
 from pathlib import Path
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Merge local HLS .ts segment folders into .mp4 files.")
+def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--input-dir", required=True, type=Path)
     parser.add_argument("--glob", default="*.m3u8")
     parser.add_argument("--ffmpeg", default="ffmpeg")
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
-    return parser.parse_args()
 
 
 def numeric_key(path: Path) -> tuple[int, str]:
@@ -64,8 +63,7 @@ def merge_playlist(playlist: Path, ffmpeg: str, overwrite: bool, dry_run: bool) 
     return "merged", output, len(segments)
 
 
-def main() -> None:
-    args = parse_args()
+def run_cli(args: argparse.Namespace) -> None:
     playlists = sorted(args.input_dir.glob(args.glob), key=lambda path: path.name)
     if not playlists:
         raise SystemExit(f"No playlists matched {args.glob} under {args.input_dir}")
@@ -73,7 +71,3 @@ def main() -> None:
     for playlist in playlists:
         status, output, count = merge_playlist(playlist, args.ffmpeg, args.overwrite, args.dry_run)
         print(f"{status}: {playlist.name} -> {output.name} ({count} segments)", flush=True)
-
-
-if __name__ == "__main__":
-    main()

@@ -1,6 +1,7 @@
+"""Watcher that post-processes finished ASR folders with correction + notes."""
+
 import argparse
 import json
-import os
 import re
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
@@ -8,18 +9,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from lecture_md_correct import DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_TERMS, run_correction
-from lecture_md_notes import run_notes
+from lecture_md import config
+from lecture_md.correct import run_correction
+from lecture_md.notes import run_notes
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Post-process completed slide ASR outputs with MiMo optimization and lecture-note generation."
-    )
+def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output-root", required=True, type=Path, help="Batch output root containing per-video folders.")
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
-    parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--terms", default=DEFAULT_TERMS)
+    parser.add_argument("--base-url", default=None, help="OpenAI-compatible API base URL.")
+    parser.add_argument("--model", default=None, help="Chat model name.")
+    parser.add_argument("--terms", default=None, help="Comma-separated domain terms.")
     parser.add_argument("--jobs", default=2, type=int, help="Number of video folders to process in parallel.")
     parser.add_argument("--sleep", default=0.0, type=float, help="Delay between API calls inside each video.")
     parser.add_argument("--retries", default=12, type=int)
@@ -36,7 +35,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--keep-asr-md", action="store_true", help="Keep raw slides_asr.md after successful postprocess.")
     parser.add_argument("--overwrite", action="store_true", help="Regenerate optimized and lecture-note files.")
     parser.add_argument("--once", action="store_true", help="Exit after one scan even if --watch is set.")
-    return parser.parse_args()
 
 
 def now_iso() -> str:
@@ -212,10 +210,8 @@ def process_dir(args: argparse.Namespace, out_dir: Path) -> dict[str, Any]:
     return record
 
 
-def main() -> None:
-    args = parse_args()
-    if not os.environ.get("MIMO_API_KEY"):
-        raise RuntimeError("Set MIMO_API_KEY before running API postprocess.")
+def run_cli(args: argparse.Namespace) -> None:
+    config.require_api_key()
     if args.jobs < 1:
         raise ValueError("--jobs must be at least 1")
     root = args.output_root
@@ -259,7 +255,3 @@ def main() -> None:
                 break
 
     print(f"Wrote {manifest}", flush=True)
-
-
-if __name__ == "__main__":
-    main()

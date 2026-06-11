@@ -1,33 +1,49 @@
+"""Render lecture Markdown notes to PDF with a headless Chromium browser."""
+
 import argparse
 import html
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 
 
-DEFAULT_EDGE_PATHS = [
+WINDOWS_BROWSER_PATHS = [
     Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
     Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
     Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
     Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
 ]
 
+MACOS_BROWSER_PATHS = [
+    Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+    Path("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+    Path("/Applications/Chromium.app/Contents/MacOS/Chromium"),
+]
+
+BROWSER_COMMANDS = [
+    "msedge",
+    "google-chrome",
+    "google-chrome-stable",
+    "chromium",
+    "chromium-browser",
+    "chrome",
+]
 
 IMAGE_RE = re.compile(r"^\[!\[([^\]]*)\]\(([^)]+)\)\]\(([^)]+)\)\s*$")
 LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Render lecture Markdown notes to PDF with a headless browser.")
+def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--input-root", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--dir-glob", default="*", help="Glob for per-video folders under --input-root.")
     parser.add_argument("--include-name", action="append", default=[])
     parser.add_argument("--md-name", default="slides_lecture_notes.md")
-    parser.add_argument("--browser", type=Path)
+    parser.add_argument("--browser", type=Path, help="Path to a Chrome/Edge/Chromium executable.")
     parser.add_argument("--overwrite", action="store_true")
-    return parser.parse_args()
 
 
 def find_browser(explicit: Path | None) -> Path:
@@ -35,10 +51,14 @@ def find_browser(explicit: Path | None) -> Path:
         if explicit.exists():
             return explicit
         raise FileNotFoundError(f"Browser not found: {explicit}")
-    for path in DEFAULT_EDGE_PATHS:
+    for path in WINDOWS_BROWSER_PATHS + MACOS_BROWSER_PATHS:
         if path.exists():
             return path
-    raise FileNotFoundError("No Edge/Chrome executable found.")
+    for command in BROWSER_COMMANDS:
+        found = shutil.which(command)
+        if found:
+            return Path(found)
+    raise FileNotFoundError("No Chrome/Edge/Chromium executable found. Pass one with --browser.")
 
 
 def safe_name(text: str) -> str:
@@ -166,15 +186,14 @@ def render_pdf(browser: Path, html_path: Path, pdf_path: Path) -> None:
         subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
-def main() -> None:
-    args = parse_args()
+def run_cli(args: argparse.Namespace) -> None:
     browser = find_browser(args.browser)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     html_dir = args.output_dir / "html"
     html_dir.mkdir(parents=True, exist_ok=True)
 
     selected = []
-    for directory in sorted(args.input_root.glob("screen_*"), key=lambda path: path.name):
+    for directory in sorted(args.input_root.glob(args.dir_glob), key=lambda path: path.name):
         if not directory.is_dir():
             continue
         if args.include_name and not any(include in directory.name for include in args.include_name):
@@ -196,7 +215,3 @@ def main() -> None:
         print(f"rendered: {pdf_path.name}", flush=True)
 
     print(f"PDF count: {len(list(args.output_dir.glob('*.pdf')))}", flush=True)
-
-
-if __name__ == "__main__":
-    main()
