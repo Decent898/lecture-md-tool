@@ -8,7 +8,8 @@
 
 - PyQt6 原生桌面界面（`lecture-md gui` / `lecture-md-gui`）：侧边栏多页应用，
   含拖拽任务队列、分阶段实时进度、结果浏览与 Markdown 预览、PDF 导出、
-  API 连接测试、环境自检、设置持久化与浅色/深色双主题
+  API 连接测试、环境自检（缺失依赖一键安装，ffmpeg 走 static-ffmpeg）、
+  设置持久化与浅色/深色双主题
 
 ### 重构
 

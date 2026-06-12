@@ -176,7 +176,7 @@ lecture-md to-pdf --input-root ./out --output-dir ./pdf
 
 - **处理中心**：把视频或整个文件夹拖入窗口即可建立任务队列，选择处理方案后一键开始；切页去重 → 按页转写 → 纠错优化 → 讲义生成四个阶段实时显示进度与当前页码，可随时停止，已完成的页面自动断点续跑。
 - **结果浏览**：按视频浏览生成的讲义，内置 Markdown 预览（含幻灯片截图），一键打开输出文件夹或导出 PDF。
-- **设置**：API 地址 / 密钥 / 模型、课程术语表、翻页灵敏度、防抖窗口、Whisper 模型与推理设备等全部图形化配置并自动保存；附 API 连接测试和环境自检（ffmpeg、slidegeist、faster-whisper、RapidOCR）。
+- **设置**：API 地址 / 密钥 / 模型、课程术语表、翻页灵敏度、防抖窗口、Whisper 模型与推理设备等全部图形化配置并自动保存；附 API 连接测试和环境自检（ffmpeg、slidegeist、faster-whisper、RapidOCR），缺失的依赖可以直接点「安装」一键补齐——ffmpeg 会通过 static-ffmpeg 自动下载,无需手动配置 PATH。
 - **双主题**：浅色 / 深色一键切换。
 
 ## `process` 常用参数

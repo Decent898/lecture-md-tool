@@ -1,8 +1,6 @@
 """Main window of the lecture-md desktop GUI."""
 
-import importlib.util
 import os
-import shutil
 import sys
 from pathlib import Path
 
@@ -35,6 +33,7 @@ from PyQt6.QtWidgets import (
 )
 
 from lecture_md import __version__
+from lecture_md.gui import envcheck
 from lecture_md.gui.runner import PROFILE_LABELS, TaskRunner, profile_stages
 from lecture_md.gui.theme import build_qss
 from lecture_md.gui.widgets import (
@@ -76,6 +75,9 @@ class MainWindow(QMainWindow):
         self.fail_count = 0
         self.api_worker: ApiTestWorker | None = None
         self.pdf_process: QProcess | None = None
+        self.install_process: QProcess | None = None
+        self._install_queue: list[list[str]] = []
+        self._install_key: str | None = None
 
         self.setWindowTitle("lecture-md · 课程录屏转讲义")
         self.resize(1280, 850)
@@ -727,7 +729,7 @@ class MainWindow(QMainWindow):
         env_head.addWidget(env_title, 1)
         env_head.addWidget(env_refresh)
         env_layout.addLayout(env_head)
-        self.env_rows: dict[str, tuple[QLabel, QLabel]] = {}
+        self.env_rows: dict[str, tuple[QLabel, QLabel, QPushButton]] = {}
         for key, label in [
             ("python", "Python"),
             ("ffmpeg", "ffmpeg(音频切分,必需)"),
@@ -739,10 +741,22 @@ class MainWindow(QMainWindow):
             name = QLabel(label)
             status = QLabel("…")
             status.setObjectName("muted")
+            install = QPushButton("安装")
+            install.setObjectName("link")
+            install.setCursor(Qt.CursorShape.PointingHandCursor)
+            install.setVisible(False)
+            if key in envcheck.INSTALL_STEPS:
+                install.setToolTip(envcheck.INSTALL_NOTES.get(key, ""))
+                install.clicked.connect(lambda _=False, k=key: self._install_dep(k))
             row.addWidget(name, 1)
             row.addWidget(status)
+            row.addWidget(install)
             env_layout.addLayout(row)
-            self.env_rows[key] = (name, status)
+            self.env_rows[key] = (name, status, install)
+        self.install_hint = QLabel("")
+        self.install_hint.setObjectName("muted")
+        self.install_hint.setWordWrap(True)
+        env_layout.addWidget(self.install_hint)
         env_layout.addStretch(1)
         grid.addWidget(env_card, 1, 1)
 
@@ -772,26 +786,84 @@ class MainWindow(QMainWindow):
 
     # -- environment ------------------------------------------------------
     def _refresh_env_checks(self) -> None:
+        installing = self._install_key
+
         def mark(key: str, ok: bool, text: str, hint: str = "") -> None:
-            _, status = self.env_rows[key]
+            _, status, install = self.env_rows[key]
             status.setText(text)
             status.setObjectName("statusOk" if ok else "statusBad")
             if hint:
                 status.setToolTip(hint)
             repolish(status)
+            install.setVisible(not ok and key in envcheck.INSTALL_STEPS)
+            install.setEnabled(installing is None)
 
         mark("python", True, f"✓ {sys.version.split()[0]}")
-        ffmpeg = shutil.which("ffmpeg")
-        mark("ffmpeg", bool(ffmpeg), "✓ 已安装" if ffmpeg else "✗ 未找到", ffmpeg or "请安装 ffmpeg 并加入 PATH")
-        slidegeist = shutil.which("slidegeist") or (
-            Path(sys.executable).parent / ("slidegeist.exe" if os.name == "nt" else "slidegeist")
-        )
-        has_sg = bool(shutil.which("slidegeist")) or Path(slidegeist).exists()
-        mark("slidegeist", has_sg, "✓ 已安装" if has_sg else "✗ 未找到", "pip install slidegeist")
-        has_fw = importlib.util.find_spec("faster_whisper") is not None
+        ffmpeg_ok, ffmpeg_detail = envcheck.ffmpeg_status()
+        ffmpeg_text = "✓ 已安装" if ffmpeg_ok else "✗ 未找到"
+        if ffmpeg_ok and ffmpeg_detail.startswith("static-ffmpeg:"):
+            ffmpeg_text = "✓ static-ffmpeg"
+        mark("ffmpeg", ffmpeg_ok, ffmpeg_text, ffmpeg_detail or "点击「安装」自动获取,或手动安装 ffmpeg 并加入 PATH")
+        sg_ok, sg_detail = envcheck.slidegeist_status()
+        mark("slidegeist", sg_ok, "✓ 已安装" if sg_ok else "✗ 未找到", sg_detail or "pip install slidegeist")
+        has_fw = envcheck.module_status("faster_whisper")
         mark("faster_whisper", has_fw, "✓ 已安装" if has_fw else "✗ 未安装", 'pip install "lecture-md-tool[local]"')
-        has_ocr = importlib.util.find_spec("rapidocr_onnxruntime") is not None
+        has_ocr = envcheck.module_status("rapidocr_onnxruntime")
         mark("rapidocr", has_ocr, "✓ 已安装" if has_ocr else "✗ 未安装", 'pip install "lecture-md-tool[ocr]"')
+
+    # -- one-click install -------------------------------------------------
+    def _install_dep(self, key: str) -> None:
+        if self.install_process is not None or key not in envcheck.INSTALL_STEPS:
+            return
+        self._install_key = key
+        self._install_queue = [list(cmd) for cmd in envcheck.INSTALL_STEPS[key]]
+        _, status, _ = self.env_rows[key]
+        status.setText("⏳ 安装中…")
+        status.setObjectName("statusWarn")
+        repolish(status)
+        for _, _, button in self.env_rows.values():
+            button.setEnabled(False)
+        self.install_hint.setText(envcheck.INSTALL_NOTES.get(key, "正在安装…"))
+        self._run_next_install_step()
+
+    def _run_next_install_step(self) -> None:
+        if not self._install_queue:
+            self._install_finished(True)
+            return
+        cmd = self._install_queue.pop(0)
+        process = QProcess(self)
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        process.readyReadStandardOutput.connect(self._install_output)
+        process.finished.connect(self._install_step_done)
+        self.install_process = process
+        process.start(cmd[0], cmd[1:])
+
+    def _install_output(self) -> None:
+        if not self.install_process:
+            return
+        data = bytes(self.install_process.readAllStandardOutput()).decode("utf-8", errors="replace")
+        lines = [line.strip() for line in data.splitlines() if line.strip()]
+        if lines:
+            self.install_hint.setText(lines[-1][:160])
+
+    def _install_step_done(self, exit_code: int, _status) -> None:
+        self.install_process = None
+        if exit_code == 0:
+            self._run_next_install_step()
+        else:
+            self._install_finished(False)
+
+    def _install_finished(self, ok: bool) -> None:
+        key = self._install_key
+        self._install_key = None
+        self._install_queue = []
+        self.install_process = None
+        if ok:
+            self.install_hint.setText("安装完成 ✓")
+        else:
+            note = envcheck.INSTALL_NOTES.get(key or "", "")
+            self.install_hint.setText(f"安装失败,可在命令行手动执行:{note}")
+        self._refresh_env_checks()
 
     def _test_api(self) -> None:
         settings = self.current_settings()

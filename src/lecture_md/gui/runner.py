@@ -1,10 +1,13 @@
 """Run the lecture-md pipeline per video and turn its log into progress events."""
 
+import os
 import re
+import shutil
 import sys
-from pathlib import Path
 
 from PyQt6.QtCore import QObject, QProcess, QProcessEnvironment, pyqtSignal
+
+from lecture_md.gui.envcheck import static_ffmpeg_dir
 
 PROFILES = {
     "local_only": {"asr": "local", "optimize": "none", "notes": "none"},
@@ -117,6 +120,10 @@ class TaskRunner(QObject):
         env.insert("PYTHONUTF8", "1")
         env.insert("PYTHONIOENCODING", "utf-8")
         env.insert("PYTHONUNBUFFERED", "1")
+        if not shutil.which("ffmpeg"):
+            ffmpeg_dir = static_ffmpeg_dir()
+            if ffmpeg_dir:
+                env.insert("PATH", ffmpeg_dir + os.pathsep + env.value("PATH"))
         for key, value in build_env_overrides(settings).items():
             env.insert(key, value)
         process.setProcessEnvironment(env)
