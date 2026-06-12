@@ -43,4 +43,5 @@ batch.log
 *.webm
 *.m4v
 *.wav
-*.t
+*.ts
+*.m3u8
