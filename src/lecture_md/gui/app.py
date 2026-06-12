@@ -6,7 +6,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QSettings, Qt, QUrl
+from PyQt6.QtCore import QProcess, QSettings, Qt, QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QApplication,
@@ -24,7 +24,6 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
-    QProcess,
     QPushButton,
     QScrollArea,
     QSpinBox,
