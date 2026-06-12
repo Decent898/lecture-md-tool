@@ -221,6 +221,11 @@ class MainWindow(QMainWindow):
         header.addWidget(self.stop_button)
         layout.addLayout(header)
 
+        self.profile_desc = QLabel("")
+        self.profile_desc.setObjectName("muted")
+        self.profile_desc.setWordWrap(True)
+        layout.addWidget(self.profile_desc)
+
         self.drop_zone = DropZone()
         self.drop_zone.paths_dropped.connect(self._add_videos)
         layout.addWidget(self.drop_zone)
@@ -408,7 +413,12 @@ class MainWindow(QMainWindow):
         self.log_view.appendPlainText(line)
 
     def _on_profile_changed(self) -> None:
-        self.stage_view.configure(profile_stages(self.profile_combo.currentData() or "full"))
+        key = self.profile_combo.currentData() or "full"
+        self.stage_view.configure(profile_stages(key))
+        for profile_key, _, description in PROFILE_LABELS:
+            if profile_key == key:
+                self.profile_desc.setText("💡 " + description)
+                break
         self._save_settings()
 
     # ================= page 2: results =================

@@ -17,10 +17,30 @@ PROFILES = {
 }
 
 PROFILE_LABELS = [
-    ("local_only", "仅本地转写", "切页 + 本地 Whisper 转写,全程不调用 API,无需密钥"),
-    ("standard", "本地转写 + 纠错", "本地 Whisper 转写后,用 API 做 OCR 辅助纠错"),
-    ("full", "完整讲义(推荐)", "本地转写 + API 纠错 + 生成适合复习的讲义稿"),
-    ("all_api", "全 API", "转写与纠错全部走 API,本机无需 GPU,消耗较多 Token"),
+    (
+        "local_only",
+        "仅转写(免费)",
+        "得到:每页 PPT 截图 + 原始语音逐字稿(slides_asr.md)。"
+        "全程在本机运行,不调用 API、零费用;缺点是转写里会有错别字和口语。",
+    ),
+    (
+        "standard",
+        "转写 + 纠错",
+        "得到:校对干净的逐字稿(slides_optimized.md)——错别字、专业术语、断句"
+        "已由大模型对照 PPT 上的文字逐页修正。本机转写 + 少量 API 调用。",
+    ),
+    (
+        "full",
+        "完整讲义(推荐)",
+        "得到:每页一份精炼讲义稿 + 校正逐字稿 + 原始转写,三层内容齐全"
+        "(slides_lecture_notes.md),可直接复习或导出 PDF。本机转写 + API 纠错与撰写。",
+    ),
+    (
+        "all_api",
+        "全 API(本机零负担)",
+        "得到:与「完整讲义」完全相同的输出,但语音转写也交给 API 完成,"
+        "不占用本机 CPU/GPU、无需装 faster-whisper;Token 消耗最大。",
+    ),
 ]
 
 RE_ASR = re.compile(r"^\[ASR (\d+)/(\d+)\]")
