@@ -244,6 +244,8 @@ lecture-md to-pdf --input-root ./out --output-dir ./pdf
 
 **翻页检测太碎 / 漏页？** 调节 `--scene-threshold`（越小越敏感）与 `--min-scene-len`。两小时课程出现成百上千页时，保持去重开启并调大 `--dedupe-stable-seconds`；如果可以接受更激进的视觉合并，可使用 `--dedupe-mode merge`。
 
+**Windows 安装时报 `[WinError 5] 拒绝访问`？** 这是在向系统 Python（如 `C:\Python312`）安装但缺少管理员权限导致的。请改用虚拟环境安装：`py -m venv .venv`，激活后再执行 `pip install -e ".[all]"`；想复用系统里已装的大包，可加 `--system-site-packages` 创建 venv。
+
 **本地 ASR 太慢？** 用 `--local-asr-device cuda` 启用 GPU，或换更小的模型 `--local-asr-model tiny/base`。首次运行会自动下载所选 Whisper 模型。
 
 **API 频繁 429？** 调大 `--sleep` 与 `--retry-sleep`。所有步骤都会增量保存，可放心中断后重跑同一条命令续跑。
