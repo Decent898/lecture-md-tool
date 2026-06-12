@@ -168,9 +168,16 @@ lecture-md to-pdf --input-root ./out --output-dir ./pdf
 | `to-pdf` | 把讲义 Markdown 渲染成 PDF |
 | `gui` | 启动 PyQt6 桌面界面 |
 
-桌面入口 `lecture-md-gui` 和 `lecture-md gui` 会调用同一套 CLI 流水线，适合不想手写参数时使用。
-
 各子命令均支持 `--help` 查看全部参数。
+
+## 桌面界面
+
+`lecture-md gui`（或 `lecture-md-gui`）提供原生桌面应用，不需要记忆任何命令行参数，安装方式：`pip install -e ".[gui]"`。
+
+- **处理中心**：把视频或整个文件夹拖入窗口即可建立任务队列，选择处理方案后一键开始；切页去重 → 按页转写 → 纠错优化 → 讲义生成四个阶段实时显示进度与当前页码，可随时停止，已完成的页面自动断点续跑。
+- **结果浏览**：按视频浏览生成的讲义，内置 Markdown 预览（含幻灯片截图），一键打开输出文件夹或导出 PDF。
+- **设置**：API 地址 / 密钥 / 模型、课程术语表、翻页灵敏度、防抖窗口、Whisper 模型与推理设备等全部图形化配置并自动保存；附 API 连接测试和环境自检（ffmpeg、slidegeist、faster-whisper、RapidOCR）。
+- **双主题**：浅色 / 深色一键切换。
 
 ## `process` 常用参数
 

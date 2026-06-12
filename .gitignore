@@ -45,3 +45,6 @@ batch.log
 *.wav
 *.ts
 *.m3u8
+
+# Local backup of the pre-rewrite GUI
+gui_legacy.py.bak
