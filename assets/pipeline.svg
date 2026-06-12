@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="360" viewBox="0 0 1120 360" role="img" aria-labelledby="title desc">
+  <title id="title">lecture-md-tool pipeline</title>
+  <desc id="desc">Pipeline from lecture video to slide detection, ASR, LLM cleanup, notes, and PDF output.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M2 2 L10 6 L2 10 Z" fill="#64748b"/>
+    </marker>
+    <filter id="cardShadow" x="-10%" y="-20%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .card { fill: #ffffff; stroke: #d8dee9; stroke-width: 1.4; filter: url(#cardShadow); }
+      .title { font: 700 20px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+      .sub { font: 400 13px "Segoe UI", Arial, sans-serif; fill: #475569; }
+      .icon { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .line { stroke: #64748b; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1120" height="360" rx="28" fill="#f8fafc"/>
+  <path d="M70 180 H185" class="line"/>
+  <path d="M320 180 H435" class="line"/>
+  <path d="M570 180 H685" class="line"/>
+  <path d="M820 180 H935" class="line"/>
+  <g transform="translate(28 98)">
+    <rect class="card" width="140" height="164" rx="20"/>
+    <rect x="34" y="36" width="72" height="48" rx="8" fill="#dbeafe" stroke="#2563eb" stroke-width="4"/>
+    <path d="M62 52l24 8-24 8z" fill="#2563eb"/>
+    <path d="M38 112h64" class="icon" stroke="#0f766e"/>
+    <path d="M42 126h56" class="icon" stroke="#f59e0b"/>
+    <text x="70" y="110" text-anchor="middle" class="title">Video</text>
+    <text x="70" y="132" text-anchor="middle" class="sub">讲课 + PPT</text>
+  </g>
+  <g transform="translate(220 98)">
+    <rect class="card" width="140" height="164" rx="20"/>
+    <rect x="34" y="32" width="72" height="54" rx="8" fill="#ecfeff" stroke="#0891b2" stroke-width="4"/>
+    <path d="M48 52h44M48 68h32" class="icon" stroke="#0891b2"/>
+    <path d="M36 98h68M46 112h48" class="icon" stroke="#f59e0b"/>
+    <text x="70" y="110" text-anchor="middle" class="title">Slides</text>
+    <text x="70" y="132" text-anchor="middle" class="sub">切页 + 防抖</text>
+  </g>
+  <g transform="translate(470 98)">
+    <rect class="card" width="140" height="164" rx="20"/>
+    <path d="M42 80c10-32 46-32 56 0" class="icon" stroke="#2563eb"/>
+    <rect x="54" y="54" width="32" height="54" rx="16" fill="#dbeafe" stroke="#2563eb" stroke-width="4"/>
+    <path d="M38 126h64M70 108v18" class="icon" stroke="#0f766e"/>
+    <text x="70" y="110" text-anchor="middle" class="title">ASR</text>
+    <text x="70" y="132" text-anchor="middle" class="sub">按页转写</text>
+  </g>
+  <g transform="translate(720 98)">
+    <rect class="card" width="140" height="164" rx="20"/>
+    <path d="M42 46h56v70H42z" fill="#fff7ed" stroke="#f97316" stroke-width="4"/>
+    <path d="M54 62h32M54 78h24M54 94h36" class="icon" stroke="#f97316"/>
+    <path d="M98 48l18-18M112 52l14-6" class="icon" stroke="#0f766e"/>
+    <text x="70" y="110" text-anchor="middle" class="title">LLM</text>
+    <text x="70" y="132" text-anchor="middle" class="sub">OCR 纠错</text>
+  </g>
+  <g transform="translate(970 98)">
+    <rect class="card" width="140" height="164" rx="20"/>
+    <path d="M38 36h64l18 18v70H38z" fill="#f0fdf4" stroke="#16a34a" stroke-width="4"/>
+    <path d="M102 36v20h18" class="icon" stroke="#16a34a"/>
+    <text x="70" y="82" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="28" font-weight="800" fill="#16a34a">MD</text>
+    <text x="70" y="110" text-anchor="middle" class="title">Notes</text>
+    <text x="70" y="132" text-anchor="middle" class="sub">Markdown / PDF</text>
+  </g>
+  <text x="560" y="314" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="#64748b">Incremental, resumable, and friendly to long lecture recordings</text>
+</svg>

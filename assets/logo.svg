@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="360" viewBox="0 0 360 360" role="img" aria-labelledby="title desc">
+  <title id="title">lecture-md-tool logo</title>
+  <desc id="desc">A lecture slide, waveform, and Markdown mark combined into a compact logo.</desc>
+  <defs>
+    <linearGradient id="bg" x1="40" y1="30" x2="330" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563eb"/>
+      <stop offset="0.55" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#0f172a" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <rect x="28" y="28" width="304" height="304" rx="56" fill="url(#bg)" filter="url(#shadow)"/>
+  <rect x="78" y="72" width="204" height="132" rx="18" fill="#ffffff" opacity="0.96"/>
+  <rect x="100" y="98" width="90" height="12" rx="6" fill="#2563eb"/>
+  <rect x="100" y="124" width="132" height="10" rx="5" fill="#94a3b8"/>
+  <rect x="100" y="146" width="112" height="10" rx="5" fill="#cbd5e1"/>
+  <path d="M236 105l28 24-28 24z" fill="#0f766e"/>
+  <path d="M82 242h24l13-42 22 76 22-92 21 58h18l16-35 18 35h42" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M104 286h40l25-44 25 44h62" fill="none" stroke="#fef3c7" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="180" y="236" text-anchor="middle" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="46" font-weight="800" fill="#ffffff">MD</text>
+</svg>
