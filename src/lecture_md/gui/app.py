@@ -60,6 +60,15 @@ def default_output_root() -> str:
     return str(Path.home() / "Documents" / "lecture_md_runs" / "gui")
 
 
+def load_guide() -> str:
+    try:
+        from importlib import resources
+
+        return resources.files("lecture_md.gui").joinpath("guide.md").read_text(encoding="utf-8")
+    except Exception:
+        return "未找到使用说明文档(guide.md)。完整文档请见 GitHub 仓库。"
+
+
 class MainWindow(QMainWindow):
     def __init__(self, output_root: str | None = None) -> None:
         super().__init__()
@@ -108,6 +117,7 @@ class MainWindow(QMainWindow):
         self.pages = QStackedWidget()
         self.pages.addWidget(self._wrap_page(self._build_process_page()))
         self.pages.addWidget(self._wrap_page(self._build_results_page()))
+        self.pages.addWidget(self._wrap_page(self._build_guide_page()))
         self.pages.addWidget(self._wrap_page(self._build_settings_page()))
         layout.addWidget(self.pages, 1)
 
@@ -147,7 +157,9 @@ class MainWindow(QMainWindow):
         layout.addSpacing(18)
 
         self.nav_buttons: list[QPushButton] = []
-        for index, (icon, label) in enumerate([("▶", "处理中心"), ("🗂", "结果浏览"), ("⚙", "设 置")]):
+        for index, (icon, label) in enumerate(
+            [("▶", "处理中心"), ("🗂", "结果浏览"), ("📖", "使用说明"), ("⚙", "设 置")]
+        ):
             button = QPushButton(f"{icon}  {label}")
             button.setObjectName("navBtn")
             button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -344,9 +356,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "缺少 API 密钥",
-                "当前处理方案需要调用 API。\n请在「设置」页填写 API 密钥,或改用「仅本地转写」方案。",
+                "当前处理方案需要调用 API。\n请在「设置」页填写 API 密钥,或改用「仅转写(免费)」方案。",
             )
-            self._select_page(2)
+            self._select_page(3)
             return
         Path(settings["output_root"]).mkdir(parents=True, exist_ok=True)
         self.queue_active = True
@@ -570,7 +582,26 @@ class MainWindow(QMainWindow):
         else:
             self.pdf_status.setText("PDF 导出失败,请确认已安装 Chrome/Edge,或查看日志")
 
-    # ================= page 3: settings =================
+    # ================= page 3: guide =================
+    def _build_guide_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(14)
+        h1 = QLabel("使用说明")
+        h1.setObjectName("h1")
+        sub = QLabel("四种处理方案的区别、准备工作和常见问题")
+        sub.setObjectName("muted")
+        layout.addWidget(h1)
+        layout.addWidget(sub)
+        viewer = QTextBrowser()
+        viewer.setObjectName("preview")
+        viewer.setOpenExternalLinks(True)
+        viewer.setMarkdown(load_guide())
+        layout.addWidget(viewer, 1)
+        return page
+
+    # ================= page 4: settings =================
     def _build_settings_page(self) -> QWidget:
         page = QWidget()
         outer = QVBoxLayout(page)

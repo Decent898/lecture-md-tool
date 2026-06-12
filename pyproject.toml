@@ -47,3 +47,6 @@ Issues = "https://github.com/Decent898/lecture-md-tool/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"lecture_md.gui" = ["*.md"]
