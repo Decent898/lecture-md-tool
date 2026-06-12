@@ -247,6 +247,7 @@ class MainWindow(QMainWindow):
         queue_layout.addLayout(queue_head)
         self.queue_list = QListWidget()
         self.queue_list.setSelectionMode(QListWidget.SelectionMode.NoSelection)
+        self.queue_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         queue_layout.addWidget(self.queue_list, 1)
         body.addWidget(queue_card, 4)
 
@@ -289,7 +290,9 @@ class MainWindow(QMainWindow):
             row = QueueRow(video)
             row.removed.connect(self._remove_video)
             item = QListWidgetItem()
-            item.setSizeHint(row.sizeHint())
+            hint = row.sizeHint()
+            hint.setHeight(52)
+            item.setSizeHint(hint)
             self.queue_list.addItem(item)
             self.queue_list.setItemWidget(item, row)
             self.queue.append(video)

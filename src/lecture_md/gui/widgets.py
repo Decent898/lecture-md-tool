@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -254,11 +255,13 @@ class QueueRow(QWidget):
         self.video = video
         frame = QFrame()
         frame.setObjectName("queueRow")
+        frame.setFixedHeight(44)
         inner = QHBoxLayout(frame)
-        inner.setContentsMargins(12, 8, 8, 8)
+        inner.setContentsMargins(12, 0, 8, 0)
         inner.setSpacing(10)
         self.name = QLabel(Path(video).name)
         self.name.setToolTip(video)
+        self.name.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.status = QLabel("等待")
         self.status.setObjectName("muted")
         self.close_btn = QToolButton()
