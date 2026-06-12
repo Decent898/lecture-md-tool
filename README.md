@@ -68,6 +68,7 @@ pip install -e ".[all]"
 | `pip install -e .` | 核心流水线：PPT 切分 + API ASR |
 | `pip install -e ".[local]"` | 本地 Whisper ASR：`faster-whisper` |
 | `pip install -e ".[ocr]"` | OCR 辅助纠错：`rapidocr-onnxruntime` |
+| `pip install -e ".[gui]"` | PyQt6 桌面界面 |
 | `pip install -e ".[all]"` | 全部功能 |
 
 Windows 上如果 `ffmpeg` 不在 PATH 中，可先执行：
@@ -110,6 +111,14 @@ $env:LECTURE_MD_CHAT_MODEL = "mimo-v2.5-pro"
 > 注意：API ASR 使用 `/v1/chat/completions` 的 `input_audio` 消息格式，不是 `/v1/audio/transcriptions`。不要把密钥写进代码或提交到仓库。
 
 ## 快速开始
+
+启动桌面界面：
+
+```bash
+lecture-md-gui
+# or
+lecture-md gui
+```
 
 处理单个视频，本地 ASR，全程不调用 API：
 
@@ -157,6 +166,9 @@ lecture-md to-pdf --input-root ./out --output-dir ./pdf
 | `dedupe` | 单步：清理 `slides.md` 中的不稳定切页 |
 | `merge-hls` | 把本地 HLS `.ts` 分片合并成 `.mp4` |
 | `to-pdf` | 把讲义 Markdown 渲染成 PDF |
+| `gui` | 启动 PyQt6 桌面界面 |
+
+桌面入口 `lecture-md-gui` 和 `lecture-md gui` 会调用同一套 CLI 流水线，适合不想手写参数时使用。
 
 各子命令均支持 `--help` 查看全部参数。
 

@@ -33,10 +33,12 @@ dependencies = [
 [project.optional-dependencies]
 local = ["faster-whisper>=1.0"]
 ocr = ["rapidocr-onnxruntime>=1.4.4"]
-all = ["faster-whisper>=1.0", "rapidocr-onnxruntime>=1.4.4"]
+gui = ["PyQt6>=6.6"]
+all = ["faster-whisper>=1.0", "rapidocr-onnxruntime>=1.4.4", "PyQt6>=6.6"]
 
 [project.scripts]
 lecture-md = "lecture_md.cli:main"
+lecture-md-gui = "lecture_md.gui:main"
 
 [project.urls]
 Homepage = "https://github.com/Decent898/lecture-md-tool"

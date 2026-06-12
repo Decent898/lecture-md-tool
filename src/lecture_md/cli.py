@@ -2,7 +2,7 @@
 
 import argparse
 
-from lecture_md import __version__, asr, correct, dedupe, hls, notes, pdf, pipeline, postprocess
+from lecture_md import __version__, asr, correct, dedupe, gui, hls, notes, pdf, pipeline, postprocess
 
 
 SUBCOMMANDS = [
@@ -22,6 +22,7 @@ SUBCOMMANDS = [
     ("dedupe", dedupe, "Clean unstable slide cuts in a slides.md file (single step)."),
     ("merge-hls", hls, "Merge local HLS .ts segment folders into .mp4 files."),
     ("to-pdf", pdf, "Render note Markdown files to PDF with a headless browser."),
+    ("gui", gui, "Launch the PyQt6 desktop interface."),
 ]
 
 
