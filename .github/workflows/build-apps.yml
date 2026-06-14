@@ -10,6 +10,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build ${{ matrix.os }}
@@ -65,10 +68,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lecture-md-gui-${{ runner.os }}
-          path: |
-            dist/lecture-md-gui-windows-x64.zip
-            dist/lecture-md-gui-macos-universal.dmg
-            dist/lecture-md-gui-linux-x64.tar.gz
+          path: dist/lecture-md-gui-*.*
           if-no-files-found: error
 
       - name: Upload assets to release
@@ -76,7 +76,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.release.tag_name || github.event.inputs.release_tag }}
-          files: |
-            dist/lecture-md-gui-windows-x64.zip
-            dist/lecture-md-gui-macos-universal.dmg
-            dist/lecture-md-gui-linux-x64.tar.gz
+          files: dist/lecture-md-gui-*.*
