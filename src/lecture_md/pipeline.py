@@ -1,6 +1,7 @@
 """End-to-end pipeline: slide extraction -> dedupe -> ASR -> correction -> notes."""
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -123,8 +124,37 @@ def run_slidegeist(
 ) -> None:
     resolved_slidegeist_bin = resolve_slidegeist_bin(slidegeist_bin)
     if resolved_slidegeist_bin == "slidegeist":
-        exe, prefix = slidegeist_command("slides")
-        cmd = [exe, *prefix]
+        args = [
+            "slides",
+            str(video),
+            "--out",
+            str(out_dir),
+            "--scene-threshold",
+            scene_threshold,
+            "--min-scene-len",
+            min_scene_len,
+            "--start-offset",
+            start_offset,
+            "-v",
+        ]
+        cmd = ["slidegeist", *args]
+        with log_path.open("a", encoding="utf-8") as log:
+            log.write("\n$ " + " ".join(cmd) + "\n")
+            log.flush()
+            old_argv = sys.argv[:]
+            try:
+                from slidegeist.cli import main as slidegeist_main
+
+                sys.argv = cmd
+                with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
+                    slidegeist_main()
+            except SystemExit as exc:
+                code = exc.code if isinstance(exc.code, int) else 1
+                if code:
+                    raise subprocess.CalledProcessError(code, cmd) from exc
+            finally:
+                sys.argv = old_argv
+        return
     else:
         cmd = [resolved_slidegeist_bin, "slides"]
     cmd += [

@@ -12,6 +12,8 @@
 - 改进 macOS `.dmg` 打包流程，降低 GitHub Actions 中 `hdiutil` 偶发失败概率
 - 修复 Windows 打包版中 slidegeist 调用 ffmpeg 时可能因 GBK 解码失败中断的问题
 - 改进本地 Whisper 模型下载失败时的提示，并支持在 GUI 填写本地模型目录
+- 打包版改为进程内调用 slidegeist，避免 macOS/Windows 内部任务重复弹出 GUI 窗口
+- 打包入口强制重配标准输出为 UTF-8，避免 Windows 日志中的中文路径乱码
 
 ### 新增
 
