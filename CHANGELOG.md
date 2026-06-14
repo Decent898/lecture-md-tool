@@ -10,6 +10,7 @@
   macOS / Linux / Windows 首次运行时的外部依赖
 - 修复打包版点击处理、导出 PDF 或安装按钮时可能重复弹出 GUI 窗口的问题
 - 改进 macOS `.dmg` 打包流程，降低 GitHub Actions 中 `hdiutil` 偶发失败概率
+- 修复 Windows 打包版中 slidegeist 调用 ffmpeg 时可能因 GBK 解码失败中断的问题
 
 ### 新增
 
