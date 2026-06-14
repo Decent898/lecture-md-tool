@@ -694,6 +694,9 @@ class MainWindow(QMainWindow):
         self.local_model_combo = QComboBox()
         for name in ["tiny", "base", "small", "medium", "large-v3"]:
             self.local_model_combo.addItem(name, name)
+        self.local_model_combo.setEditable(True)
+        self.local_model_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.local_model_combo.setToolTip("可选择模型名,也可粘贴本地 faster-whisper 模型目录")
         self.local_model_combo.setCurrentIndex(2)
         proc_form.addRow("本地 Whisper 模型", self.local_model_combo)
 
@@ -948,7 +951,7 @@ class MainWindow(QMainWindow):
             "chat_model": self.chat_model_edit.text().strip(),
             "terms": self.terms_edit.text().strip(),
             "language": self.language_combo.currentData() or "zh",
-            "local_model": self.local_model_combo.currentData() or "small",
+            "local_model": self.local_model_combo.currentText().strip() or "small",
             "device": self.device_combo.currentData() or "cpu",
             "compute_type": "int8",
             "scene_threshold": self.scene_threshold_spin.value(),
@@ -995,6 +998,8 @@ class MainWindow(QMainWindow):
             idx = combo.findData(text(key, default))
             if idx >= 0:
                 combo.setCurrentIndex(idx)
+            elif combo is self.local_model_combo:
+                combo.setCurrentText(text(key, default))
         self.scene_threshold_spin.setValue(float(text("scene_threshold", "0.001") or 0.001))
         self.min_scene_spin.setValue(int(float(text("min_scene_len", "5") or 5)))
         self.stable_spin.setValue(float(text("stable_seconds", "6") or 6))

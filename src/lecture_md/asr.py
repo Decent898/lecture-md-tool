@@ -9,6 +9,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from requests.exceptions import ConnectionError as RequestsConnectionError
+
 from lecture_md import config
 from lecture_md.client import chat_completions, message_content
 from lecture_md.runtime import resolve_executable
@@ -81,7 +83,22 @@ def load_local_whisper(model_name: str, device: str, compute_type: str) -> Any:
         raise RuntimeError(
             "Local ASR requires faster-whisper. Install it with: pip install 'lecture-md-tool[local]'"
         ) from exc
-    return WhisperModel(model_name, device=device, compute_type=compute_type)
+    try:
+        return WhisperModel(model_name, device=device, compute_type=compute_type)
+    except Exception as exc:
+        text = str(exc)
+        if (
+            "Connection refused" in text
+            or "ConnectError" in text
+            or "locate the files on the Hub" in text
+            or isinstance(exc, RequestsConnectionError)
+        ):
+            raise RuntimeError(
+                "本地 Whisper 模型加载失败: 需要从 Hugging Face 下载模型,但当前网络无法连接。"
+                "可改用「全 API」方案,或提前下载 faster-whisper 模型后在设置页"
+                "「本地 Whisper 模型」里填写本地模型目录。"
+            ) from exc
+        raise
 
 
 def call_local_asr(
