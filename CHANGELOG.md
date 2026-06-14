@@ -2,6 +2,19 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.1] - 2026-06-14
+
+### 修复
+
+- 桌面打包版内置 slidegeist、static-ffmpeg、RapidOCR/ONNX Runtime，减少
+  macOS / Linux / Windows 首次运行时的外部依赖
+- 修复打包版点击处理、导出 PDF 或安装按钮时可能重复弹出 GUI 窗口的问题
+- 改进 macOS `.dmg` 打包流程，降低 GitHub Actions 中 `hdiutil` 偶发失败概率
+
+### 新增
+
+- 为 Windows `.exe` 和 macOS `.app` 添加应用图标
+
 ## [1.0.0] - 2026-06-12
 
 ### 新增

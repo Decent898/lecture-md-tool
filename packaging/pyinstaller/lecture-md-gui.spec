@@ -9,6 +9,9 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, co
 ROOT = Path(SPECPATH).parents[1]
 SRC = ROOT / "src"
 ENTRY = ROOT / "packaging" / "pyinstaller" / "gui_entry.py"
+ICON_ICO = ROOT / "assets" / "app-icon.ico"
+ICON_ICNS = ROOT / "assets" / "app-icon.icns"
+APP_ICON = ICON_ICNS if sys.platform == "darwin" else ICON_ICO
 
 datas = collect_data_files("lecture_md.gui")
 binaries = []
@@ -59,6 +62,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,
+    icon=str(APP_ICON),
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -78,13 +82,13 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="lecture-md-gui.app",
-    icon=None,
+    icon=str(ICON_ICNS),
     bundle_identifier="io.github.decent898.lecture-md-tool",
     info_plist={
         "CFBundleName": "lecture-md-tool",
         "CFBundleDisplayName": "lecture-md-tool",
-        "CFBundleShortVersionString": "1.0.0",
-        "CFBundleVersion": "1.0.0",
+        "CFBundleShortVersionString": "1.0.1",
+        "CFBundleVersion": "1.0.1",
         "NSHighResolutionCapable": True,
     },
 )
