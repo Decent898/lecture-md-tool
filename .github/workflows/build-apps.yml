@@ -55,9 +55,18 @@ jobs:
           else
             SRC="dist/lecture-md-gui"
           fi
-          hdiutil create -volname "lecture-md-tool" \
-            -srcfolder "$SRC" \
-            -ov -format UDZO "dist/lecture-md-gui-macos-universal.dmg"
+          rm -rf dist/dmg-root
+          mkdir -p dist/dmg-root
+          cp -R "$SRC" dist/dmg-root/
+          hdiutil detach "/Volumes/lecture-md-tool" -force || true
+          for i in 1 2 3; do
+            hdiutil create -volname "lecture-md-tool" \
+              -srcfolder "dist/dmg-root" \
+              -ov -format UDZO "dist/lecture-md-gui-macos-universal.dmg" && break
+            hdiutil detach "/Volumes/lecture-md-tool" -force || true
+            sleep 5
+          done
+          test -f "dist/lecture-md-gui-macos-universal.dmg"
 
       - name: Package Linux app
         if: runner.os == 'Linux'
