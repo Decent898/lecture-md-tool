@@ -87,8 +87,8 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": "lecture-md-tool",
         "CFBundleDisplayName": "lecture-md-tool",
-        "CFBundleShortVersionString": "1.0.1",
-        "CFBundleVersion": "1.0.1",
+        "CFBundleShortVersionString": "1.0.2",
+        "CFBundleVersion": "1.0.2",
         "NSHighResolutionCapable": True,
     },
 )

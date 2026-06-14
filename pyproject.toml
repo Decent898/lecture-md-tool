@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lecture-md-tool"
-version = "1.0.1"
+version = "1.0.2"
 description = "Turn lecture screen-recording videos into slide-aligned Markdown notes with ASR and LLM cleanup."
 readme = "README.md"
 license = { text = "MIT" }
