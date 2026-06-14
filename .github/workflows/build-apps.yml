@@ -1,0 +1,82 @@
+name: Build desktop apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional release tag to upload assets to, for example v1.0.0"
+        required: false
+        default: ""
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package and build tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[all]" pyinstaller
+
+      - name: Build app with PyInstaller
+        run: pyinstaller --clean --noconfirm packaging/pyinstaller/lecture-md-gui.spec
+
+      - name: Package Windows app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/lecture-md-gui -DestinationPath dist/lecture-md-gui-windows-x64.zip -Force
+
+      - name: Package macOS app
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [ -d "dist/lecture-md-gui.app" ]; then
+            SRC="dist/lecture-md-gui.app"
+          else
+            SRC="dist/lecture-md-gui"
+          fi
+          hdiutil create -volname "lecture-md-tool" \
+            -srcfolder "$SRC" \
+            -ov -format UDZO "dist/lecture-md-gui-macos-universal.dmg"
+
+      - name: Package Linux app
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          tar -C dist -czf dist/lecture-md-gui-linux-x64.tar.gz lecture-md-gui
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lecture-md-gui-${{ runner.os }}
+          path: |
+            dist/lecture-md-gui-windows-x64.zip
+            dist/lecture-md-gui-macos-universal.dmg
+            dist/lecture-md-gui-linux-x64.tar.gz
+          if-no-files-found: error
+
+      - name: Upload assets to release
+        if: github.event_name == 'release' || github.event.inputs.release_tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || github.event.inputs.release_tag }}
+          files: |
+            dist/lecture-md-gui-windows-x64.zip
+            dist/lecture-md-gui-macos-universal.dmg
+            dist/lecture-md-gui-linux-x64.tar.gz

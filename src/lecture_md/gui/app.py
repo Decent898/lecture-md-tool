@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QProcess, QSettings, Qt, QUrl
+from PyQt6.QtCore import QProcess, QSettings, Qt, QTimer, QUrl
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
     QApplication,
@@ -1038,4 +1038,7 @@ def launch(output_root: str | None = None) -> None:
     app.setStyle("Fusion")
     window = MainWindow(output_root=output_root)
     window.show()
+    test_exit_ms = os.environ.get("LECTURE_MD_GUI_TEST_EXIT_MS")
+    if test_exit_ms:
+        QTimer.singleShot(int(test_exit_ms), app.quit)
     sys.exit(app.exec())
