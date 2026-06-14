@@ -45,6 +45,7 @@ from lecture_md.gui.widgets import (
     StageProgress,
     repolish,
 )
+from lecture_md.runtime import cli_command
 
 REPO_URL = "https://github.com/Decent898/lecture-md-tool"
 
@@ -570,7 +571,8 @@ class MainWindow(QMainWindow):
         self.pdf_status.setText("正在导出 PDF…(需要本机安装 Chrome 或 Edge)")
         self.pdf_all_button.setEnabled(False)
         self.pdf_one_button.setEnabled(False)
-        process.start(sys.executable, args)
+        program, runtime_args = cli_command(*args[2:])
+        process.start(program, runtime_args)
 
     def _pdf_done(self, exit_code: int, out_dir: str) -> None:
         self.pdf_process = None

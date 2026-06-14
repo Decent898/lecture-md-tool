@@ -15,6 +15,7 @@ from lecture_md.asr import run_asr
 from lecture_md.correct import run_correction
 from lecture_md.dedupe import dedupe_slides
 from lecture_md.notes import run_notes
+from lecture_md.runtime import is_frozen, slidegeist_command
 
 
 VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v"}
@@ -99,6 +100,8 @@ def iter_videos(input_dir: Path, today_only: bool, file_glob: str, include_names
 
 
 def resolve_slidegeist_bin(slidegeist_bin: str) -> str:
+    if is_frozen() and slidegeist_bin == "slidegeist":
+        return slidegeist_bin
     if slidegeist_bin != "slidegeist":
         return slidegeist_bin
     python_scripts_dir = Path(sys.executable).resolve().parent
@@ -119,9 +122,12 @@ def run_slidegeist(
     log_path: Path,
 ) -> None:
     resolved_slidegeist_bin = resolve_slidegeist_bin(slidegeist_bin)
-    cmd = [
-        resolved_slidegeist_bin,
-        "slides",
+    if resolved_slidegeist_bin == "slidegeist":
+        exe, prefix = slidegeist_command("slides")
+        cmd = [exe, *prefix]
+    else:
+        cmd = [resolved_slidegeist_bin, "slides"]
+    cmd += [
         str(video),
         "--out",
         str(out_dir),

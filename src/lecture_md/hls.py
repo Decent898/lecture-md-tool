@@ -6,6 +6,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from lecture_md.runtime import resolve_executable
+
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--input-dir", required=True, type=Path)
@@ -28,6 +30,7 @@ def quote_concat_path(path: Path) -> str:
 
 
 def merge_playlist(playlist: Path, ffmpeg: str, overwrite: bool, dry_run: bool) -> tuple[str, Path, int]:
+    ffmpeg = resolve_executable("ffmpeg", "LECTURE_MD_FFMPEG") if ffmpeg == "ffmpeg" else ffmpeg
     segment_dir = playlist.with_suffix("")
     output = playlist.with_suffix(".mp4")
     if output.exists() and not overwrite:

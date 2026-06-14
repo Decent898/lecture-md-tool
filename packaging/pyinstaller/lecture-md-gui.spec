@@ -1,8 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 from pathlib import Path
+import sys
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
 
 ROOT = Path(SPECPATH).parents[1]
@@ -10,13 +11,33 @@ SRC = ROOT / "src"
 ENTRY = ROOT / "packaging" / "pyinstaller" / "gui_entry.py"
 
 datas = collect_data_files("lecture_md.gui")
+binaries = []
 hiddenimports = collect_submodules("lecture_md")
+
+for package in ("slidegeist", "static_ffmpeg", "rapidocr_onnxruntime", "onnxruntime"):
+    try:
+        hiddenimports += collect_submodules(package)
+        datas += collect_data_files(package)
+        binaries += collect_dynamic_libs(package)
+    except Exception:
+        pass
+
+try:
+    from static_ffmpeg import run as static_ffmpeg_run
+
+    ffmpeg_dir = Path(static_ffmpeg_run.get_platform_dir())
+    platform_name = {"win32": "win32", "darwin": "darwin"}.get(sys.platform, "linux")
+    for item in ffmpeg_dir.iterdir():
+        if item.is_file():
+            binaries.append((str(item), f"static_ffmpeg/bin/{platform_name}"))
+except Exception:
+    pass
 
 
 a = Analysis(
     [str(ENTRY)],
     pathex=[str(SRC)],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],

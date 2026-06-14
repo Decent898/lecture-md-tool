@@ -11,13 +11,14 @@ from typing import Any
 
 from lecture_md import config
 from lecture_md.client import chat_completions, message_content
+from lecture_md.runtime import resolve_executable
 from lecture_md.slides_md import parse_sections, replace_transcript
 
 
 def extract_audio(video: Path, start: float, end: float, out_wav: Path) -> None:
     duration = max(end - start, 0.1)
     cmd = [
-        "ffmpeg",
+        resolve_executable("ffmpeg", "LECTURE_MD_FFMPEG"),
         "-y",
         "-ss",
         f"{start:.3f}",

@@ -34,7 +34,7 @@ dependencies = [
 local = ["faster-whisper>=1.0"]
 ocr = ["rapidocr-onnxruntime>=1.4.4"]
 gui = ["PyQt6>=6.6"]
-all = ["faster-whisper>=1.0", "rapidocr-onnxruntime>=1.4.4", "PyQt6>=6.6"]
+all = ["faster-whisper>=1.0", "rapidocr-onnxruntime>=1.4.4", "PyQt6>=6.6", "static-ffmpeg>=2.7"]
 
 [project.scripts]
 lecture-md = "lecture_md.cli:main"
